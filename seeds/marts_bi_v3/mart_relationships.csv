@@ -1,0 +1,4 @@
+from_mart,from_column,to_mart,to_column,cardinality,label
+mart_appointments,athena_patient_id,mart_patients,athena_patient_id,many_to_one,Patient
+mart_attribution_detail,athena_patient_id,mart_patients,athena_patient_id,many_to_one,Patient
+mart_medical_spending_detail,patient_id,mart_patients,athena_patient_id,many_to_one,Patient

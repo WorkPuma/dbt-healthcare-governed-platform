@@ -1,0 +1,399 @@
+code,code_type,exclusion_measure,value_set,evidence_class
+19180,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19200,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19220,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19240,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19303,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19304,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19305,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19306,CPT,BCSScrExcl,Unilateral Mastectomy,active
+19307,CPT,BCSScrExcl,Unilateral Mastectomy,active
+Z90.11,ICD10CM,BCSScrExcl,Absence of Right Breast,status
+Z90.12,ICD10CM,BCSScrExcl,Absence of Left Breast,status
+Z90.13,ICD10CM,BCSScrExcl,History of Bilateral Mastectomy,status
+0HTT0ZZ,ICD10PCS,BCSScrExcl,Unilateral Mastectomy Right,active
+0HTU0ZZ,ICD10PCS,BCSScrExcl,Unilateral Mastectomy Left,active
+0HTV0ZZ,ICD10PCS,BCSScrExcl,Bilateral Mastectomy,active
+116221009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+1208601007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+1268980002,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+1269061009,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+1279986002,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+136071000119101,SNOMED,BCSScrExcl,History of Bilateral Mastectomy,status
+137671000119105,SNOMED,BCSScrExcl,Absence of Left Breast,status
+137681000119108,SNOMED,BCSScrExcl,Absence of Right Breast,status
+14693006,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+14714006,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+150298000,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150301001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150302008,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150303003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150304009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150305005,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150306006,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+150307002,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+155484007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+17086001,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+172039007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172040009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172041008,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172042001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172043006,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172046003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172047007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+172050005,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+22418005,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+237367009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+237368004,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+24268003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+265248000,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+274957008,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+27865001,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+287652002,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+287653007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+287654001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+302341009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+318190001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+359728003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+359731002,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+359734005,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+359738008,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+359740003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+384723003,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+395701007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+395702000,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+406505007,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+428529004,SNOMED,BCSScrExcl,History of Bilateral Mastectomy,status
+428564008,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+428571003,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+429009003,SNOMED,BCSScrExcl,Absence of Left Breast,status
+429242008,SNOMED,BCSScrExcl,Absence of Right Breast,status
+429400009,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+446109005,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+446420001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+447135002,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+447421006,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+451201000124106,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+451211000124109,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+456903003,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+52314009,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+5835009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+5884001,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+60633004,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+64837009,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+66398006,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+70183006,SNOMED,BCSScrExcl,Clinical Unilateral Mastectomy,active
+726429001,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+726430006,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+726434002,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+726435001,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+726436000,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+726437009,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+726636007,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+741009001,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+741010006,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+741018004,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+741019007,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+76468001,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+836435007,SNOMED,BCSScrExcl,Unilateral Mastectomy Right,active
+836436008,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+836437004,SNOMED,BCSScrExcl,Unilateral Mastectomy Left,active
+870629001,SNOMED,BCSScrExcl,Bilateral Mastectomy,active
+57530,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57531,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57540,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57545,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57550,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57555,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+57556,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58150,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58152,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58200,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58210,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58240,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58260,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58262,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58263,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58267,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58270,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58275,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58280,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58285,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58290,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58291,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58292,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58293,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58294,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58548,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58550,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58552,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58553,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58554,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58570,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58571,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58572,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58573,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58575,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58951,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58953,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58954,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+58956,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+59135,CPT,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+Q51.5,ICD10CM,CCSScrExcl,Absence of Cervix Diagnosis,status
+Z90.710,ICD10CM,CCSScrExcl,Absence of Cervix Diagnosis,status
+Z90.712,ICD10CM,CCSScrExcl,Absence of Cervix Diagnosis,status
+0UTC0ZZ,ICD10PCS,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+0UTC4ZZ,ICD10PCS,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+0UTC7ZZ,ICD10PCS,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+0UTC8ZZ,ICD10PCS,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+10738891000119107,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+116140006,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+116142003,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+116143008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+116144002,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+1163275000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+1287897002,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+176697007,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+236888001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+236891001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+24293001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+248911005,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+27950001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+287924009,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+307771009,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+31545000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+35955002,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+361222003,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+361223008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+37687000,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+387626007,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+414575003,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+41566006,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+428078001,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+429290001,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+429763009,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+440383008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+446446002,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+446679008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+46226009,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+473171009,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+59750000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+608805000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+608806004,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+608807008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+708877008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+708878003,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+723171001,SNOMED,CCSScrExcl,Absence of Cervix Diagnosis,status
+739671004,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+739672006,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+739673001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+739674007,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+740514001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+740515000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+767610009,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+767611008,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+767612001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+82418001,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+86477000,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+88144003,SNOMED,CCSScrExcl,Hysterectomy With No Residual Cervix,active
+44150,CPT,COLScrExcl,Total Colectomy,active
+44151,CPT,COLScrExcl,Total Colectomy,active
+44152,CPT,COLScrExcl,Total Colectomy,active
+44153,CPT,COLScrExcl,Total Colectomy,active
+44155,CPT,COLScrExcl,Total Colectomy,active
+44156,CPT,COLScrExcl,Total Colectomy,active
+44157,CPT,COLScrExcl,Total Colectomy,active
+44158,CPT,COLScrExcl,Total Colectomy,active
+44210,CPT,COLScrExcl,Total Colectomy,active
+44211,CPT,COLScrExcl,Total Colectomy,active
+44212,CPT,COLScrExcl,Total Colectomy,active
+C18.0,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.1,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.2,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.3,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.4,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.5,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.6,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.7,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.8,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C18.9,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C19,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C20,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C21.2,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C21.8,ICD10CM,COLScrExcl,Colorectal Cancer,active
+C78.5,ICD10CM,COLScrExcl,Colorectal Cancer,active
+Z85.038,ICD10CM,COLScrExcl,Colorectal Cancer,active
+Z85.048,ICD10CM,COLScrExcl,Colorectal Cancer,active
+0DTE0ZZ,ICD10PCS,COLScrExcl,Total Colectomy,active
+0DTE4ZZ,ICD10PCS,COLScrExcl,Total Colectomy,active
+0DTE7ZZ,ICD10PCS,COLScrExcl,Total Colectomy,active
+0DTE8ZZ,ICD10PCS,COLScrExcl,Total Colectomy,active
+109838007,SNOMED,COLScrExcl,Colorectal Cancer,active
+109839004,SNOMED,COLScrExcl,Colorectal Cancer,active
+109840002,SNOMED,COLScrExcl,Colorectal Cancer,active
+10987871000119109,SNOMED,COLScrExcl,Colorectal Cancer,active
+1156783003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1156788007,SNOMED,COLScrExcl,Colorectal Cancer,active
+1156795003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1156797006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1162856006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1163568002,SNOMED,COLScrExcl,Colorectal Cancer,active
+1186811008,SNOMED,COLScrExcl,Colorectal Cancer,active
+1197354001,SNOMED,COLScrExcl,Colorectal Cancer,active
+1197355000,SNOMED,COLScrExcl,Colorectal Cancer,active
+1197359006,SNOMED,COLScrExcl,Colorectal Cancer,active
+119771000119101,SNOMED,COLScrExcl,History of total colectomy (situation),status
+1204448006,SNOMED,COLScrExcl,Colorectal Cancer,active
+123691000119104,SNOMED,COLScrExcl,Colorectal Cancer,active
+123701000119104,SNOMED,COLScrExcl,Colorectal Cancer,active
+123721000119108,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237454003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237455002,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237456001,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237458000,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237460003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237480002,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237484006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1237485007,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259403004,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259404005,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259405006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259406007,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259407003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259432001,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259436003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1259437007,SNOMED,COLScrExcl,Colorectal Cancer,active
+1268633007,SNOMED,COLScrExcl,Colorectal Cancer,active
+1268635000,SNOMED,COLScrExcl,Colorectal Cancer,active
+1269123008,SNOMED,COLScrExcl,Colorectal Cancer,active
+1287662001,SNOMED,COLScrExcl,Colorectal Cancer,active
+1287666003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1288026004,SNOMED,COLScrExcl,Colorectal Cancer,active
+1288027008,SNOMED,COLScrExcl,Colorectal Cancer,active
+1288028003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1288029006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1288033004,SNOMED,COLScrExcl,Colorectal Cancer,active
+1290068000,SNOMED,COLScrExcl,Colorectal Cancer,active
+1290085003,SNOMED,COLScrExcl,Colorectal Cancer,active
+1290086002,SNOMED,COLScrExcl,Colorectal Cancer,active
+1290087006,SNOMED,COLScrExcl,Colorectal Cancer,active
+1290274008,SNOMED,COLScrExcl,Colorectal Cancer,active
+130381000119103,SNOMED,COLScrExcl,Colorectal Cancer,active
+133751000119102,SNOMED,COLScrExcl,Colorectal Cancer,active
+16636051000119105,SNOMED,COLScrExcl,Colorectal Cancer,active
+16636101000119105,SNOMED,COLScrExcl,Colorectal Cancer,active
+1701000119104,SNOMED,COLScrExcl,Colorectal Cancer,active
+184881000119106,SNOMED,COLScrExcl,Colorectal Cancer,active
+187757001,SNOMED,COLScrExcl,Colorectal Cancer,active
+187758006,SNOMED,COLScrExcl,Colorectal Cancer,active
+187760008,SNOMED,COLScrExcl,Colorectal Cancer,active
+254582000,SNOMED,COLScrExcl,Colorectal Cancer,active
+254586002,SNOMED,COLScrExcl,Colorectal Cancer,active
+26390003,SNOMED,COLScrExcl,Total Colectomy,active
+269533000,SNOMED,COLScrExcl,Colorectal Cancer,active
+269544008,SNOMED,COLScrExcl,Colorectal Cancer,active
+276822007,SNOMED,COLScrExcl,Colorectal Cancer,active
+285312008,SNOMED,COLScrExcl,Colorectal Cancer,active
+285611007,SNOMED,COLScrExcl,Colorectal Cancer,active
+285612000,SNOMED,COLScrExcl,Colorectal Cancer,active
+286771000119106,SNOMED,COLScrExcl,Colorectal Cancer,active
+286791000119107,SNOMED,COLScrExcl,Colorectal Cancer,active
+301756000,SNOMED,COLScrExcl,Colorectal Cancer,active
+303401008,SNOMED,COLScrExcl,Total Colectomy,active
+307666008,SNOMED,COLScrExcl,Total Colectomy,active
+307667004,SNOMED,COLScrExcl,Total Colectomy,active
+307669001,SNOMED,COLScrExcl,Total Colectomy,active
+31130001,SNOMED,COLScrExcl,Total Colectomy,active
+312111009,SNOMED,COLScrExcl,Colorectal Cancer,active
+312112002,SNOMED,COLScrExcl,Colorectal Cancer,active
+312113007,SNOMED,COLScrExcl,Colorectal Cancer,active
+312114001,SNOMED,COLScrExcl,Colorectal Cancer,active
+312115000,SNOMED,COLScrExcl,Colorectal Cancer,active
+314965007,SNOMED,COLScrExcl,Colorectal Cancer,active
+314966008,SNOMED,COLScrExcl,Colorectal Cancer,active
+315058005,SNOMED,COLScrExcl,Colorectal Cancer,active
+36192008,SNOMED,COLScrExcl,Total Colectomy,active
+363351006,SNOMED,COLScrExcl,Colorectal Cancer,active
+363406005,SNOMED,COLScrExcl,Colorectal Cancer,active
+363407001,SNOMED,COLScrExcl,Colorectal Cancer,active
+363408006,SNOMED,COLScrExcl,Colorectal Cancer,active
+363409003,SNOMED,COLScrExcl,Colorectal Cancer,active
+363410008,SNOMED,COLScrExcl,Colorectal Cancer,active
+363412000,SNOMED,COLScrExcl,Colorectal Cancer,active
+363413005,SNOMED,COLScrExcl,Colorectal Cancer,active
+363414004,SNOMED,COLScrExcl,Colorectal Cancer,active
+363491008,SNOMED,COLScrExcl,Colorectal Cancer,active
+363510005,SNOMED,COLScrExcl,Colorectal Cancer,active
+369448007,SNOMED,COLScrExcl,Colorectal Cancer,active
+369449004,SNOMED,COLScrExcl,Colorectal Cancer,active
+369450004,SNOMED,COLScrExcl,Colorectal Cancer,active
+369451000,SNOMED,COLScrExcl,Colorectal Cancer,active
+369452007,SNOMED,COLScrExcl,Colorectal Cancer,active
+369453002,SNOMED,COLScrExcl,Colorectal Cancer,active
+369454008,SNOMED,COLScrExcl,Colorectal Cancer,active
+369455009,SNOMED,COLScrExcl,Colorectal Cancer,active
+369456005,SNOMED,COLScrExcl,Colorectal Cancer,active
+369457001,SNOMED,COLScrExcl,Colorectal Cancer,active
+369458006,SNOMED,COLScrExcl,Colorectal Cancer,active
+369459003,SNOMED,COLScrExcl,Colorectal Cancer,active
+369460008,SNOMED,COLScrExcl,Colorectal Cancer,active
+369461007,SNOMED,COLScrExcl,Colorectal Cancer,active
+395705003,SNOMED,COLScrExcl,Colorectal Cancer,active
+422375001,SNOMED,COLScrExcl,Colorectal Cancer,active
+422581008,SNOMED,COLScrExcl,Colorectal Cancer,active
+422985007,SNOMED,COLScrExcl,Colorectal Cancer,active
+425178004,SNOMED,COLScrExcl,Colorectal Cancer,active
+425213009,SNOMED,COLScrExcl,Colorectal Cancer,active
+429084005,SNOMED,COLScrExcl,Colorectal Cancer,active
+429699009,SNOMED,COLScrExcl,Colorectal Cancer,active
+443488001,SNOMED,COLScrExcl,Colorectal Cancer,active
+44751009,SNOMED,COLScrExcl,Total Colectomy,active
+447886005,SNOMED,COLScrExcl,Colorectal Cancer,active
+448994001,SNOMED,COLScrExcl,Colorectal Cancer,active
+449218003,SNOMED,COLScrExcl,Colorectal Cancer,active
+456004,SNOMED,COLScrExcl,Total Colectomy,active
+681601000119101,SNOMED,COLScrExcl,Colorectal Cancer,active
+681651000119102,SNOMED,COLScrExcl,Colorectal Cancer,active
+708699002,SNOMED,COLScrExcl,Colorectal cancer detected by DNA-based stool screening (finding),active
+713165008,SNOMED,COLScrExcl,Total Colectomy,active
+713573006,SNOMED,COLScrExcl,Colorectal Cancer,active
+721695008,SNOMED,COLScrExcl,Colorectal Cancer,active
+721696009,SNOMED,COLScrExcl,Colorectal Cancer,active
+721697000,SNOMED,COLScrExcl,Colorectal Cancer,active
+721698005,SNOMED,COLScrExcl,Colorectal Cancer,active
+721699002,SNOMED,COLScrExcl,Colorectal Cancer,active
+721700001,SNOMED,COLScrExcl,Colorectal Cancer,active
+721701002,SNOMED,COLScrExcl,Colorectal Cancer,active
+726654006,SNOMED,COLScrExcl,Colorectal Cancer,active
+737058005,SNOMED,COLScrExcl,Colorectal Cancer,active
+766979005,SNOMED,COLScrExcl,Colorectal Cancer,active
+766981007,SNOMED,COLScrExcl,Colorectal Cancer,active
+787108001,SNOMED,COLScrExcl,Total Colectomy,active
+787109009,SNOMED,COLScrExcl,Total Colectomy,active
+787874000,SNOMED,COLScrExcl,Total Colectomy,active
+787875004,SNOMED,COLScrExcl,Total Colectomy,active
+787876003,SNOMED,COLScrExcl,Total Colectomy,active
+801171000124106,SNOMED,COLScrExcl,Colorectal Cancer,active
+801181000124109,SNOMED,COLScrExcl,Colorectal Cancer,active
+80294005,SNOMED,COLScrExcl,Total Colectomy,active
+858579005,SNOMED,COLScrExcl,Total Colectomy,active
+93683002,SNOMED,COLScrExcl,Colorectal Cancer,active
+93761005,SNOMED,COLScrExcl,Colorectal Cancer,active
+93771007,SNOMED,COLScrExcl,Colorectal Cancer,active
+93826009,SNOMED,COLScrExcl,Colorectal Cancer,active
+93980002,SNOMED,COLScrExcl,Colorectal Cancer,active
+93984006,SNOMED,COLScrExcl,Colorectal Cancer,active
+94006002,SNOMED,COLScrExcl,Colorectal Cancer,active
+94072004,SNOMED,COLScrExcl,Colorectal Cancer,active
+94105000,SNOMED,COLScrExcl,Colorectal Cancer,active
+94179005,SNOMED,COLScrExcl,Colorectal Cancer,active
+94260004,SNOMED,COLScrExcl,Colorectal Cancer,active
+94271003,SNOMED,COLScrExcl,Colorectal Cancer,active
+94328005,SNOMED,COLScrExcl,Colorectal Cancer,active
+94509004,SNOMED,COLScrExcl,Colorectal Cancer,active
+94513006,SNOMED,COLScrExcl,Colorectal Cancer,active
+94538001,SNOMED,COLScrExcl,Colorectal Cancer,active
+94604000,SNOMED,COLScrExcl,Colorectal Cancer,active
+94643001,SNOMED,COLScrExcl,Colorectal Cancer,active
+96281000119107,SNOMED,COLScrExcl,Colorectal Cancer,active
+96981000119102,SNOMED,COLScrExcl,Colorectal Cancer,active

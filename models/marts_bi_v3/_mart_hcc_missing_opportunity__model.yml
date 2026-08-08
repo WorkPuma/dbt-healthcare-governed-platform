@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: mart_hcc_missing_opportunity
+    description: >
+      One row per patient HH believes has an OPEN HCC opportunity (a prior-year
+      recapture OR an HH-inferred suspect) that VendorNav is SILENT on AND who is
+      NOT on the daily roster HH sent to VendorNav — the "VendorNav missed these"
+      needs-outreach worklist. Grain: one row per patient (patient MRN).
+      Population = (recapture UNION suspect) MINUS the sent roster; scheduling
+      flags derived from mart_appointments (2026 completed / any future).
+      SCOPE (DEV-3828 / PR #345 #7): this worklist is the NOT-sent-to-VendorNav tail
+      and carries NO MA-enrollment or age eligibility filter, so opportunity
+      counts are DIRECTIONAL / UPPER-BOUND (non-MA / under-65 patients are not
+      excluded). The MA gate is an attribute-join follow-up (never an age gate;
+      disabled <65 MA retained), per HCC_MART_ARCHITECTURE.md §9. Do not treat
+      these as MA-gated KPIs.
+    config:
+      tags: ["marts_bi_v3", "BIPlatform", "v3_synced"]
+      contract:
+        enforced: true
+    columns:
+      - name: mart_hcc_missing_opportunity_id
+        data_type: string
+        description: Surrogate PK = patient_id. One row per missing patient.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        data_type: string
+        description: >
+          Patient MRN identifier. Same identifier as the roster patient_mrn and
+          the raf-report patient_id used for the anti-join.
+        tests:
+          - not_null
+      - name: is_recapture
+        data_type: int
+        description: >
+          1 if the patient is an org_only_recapture cohort member (prior-year
+          coded HCC not re-closed in 2026 and VendorNav-silent), else 0. A patient
+          may be both is_recapture and is_suspect.
+      - name: is_suspect
+        data_type: int
+        description: >
+          1 if the patient is an org_suspect_navina_silent cohort member
+          (HH-inferred suspect VendorNav has no flag for), else 0.
+      - name: has_future_appt
+        data_type: int
+        description: 1 if the patient has any future appointment (is_future_appointment), else 0.
+      - name: has_completed_2026
+        data_type: int
+        description: 1 if the patient has a completed appointment in calendar year 2026, else 0.
+      - name: no_2026_visit
+        data_type: int
+        description: >
+          1 when the patient has NEITHER a future appointment NOR a completed
+          2026 visit — i.e. NOT(has_future_appt OR has_completed_2026). The
+          "no visit on the books" signal.
+      - name: missing_any
+        data_type: int
+        description: >
+          Always 1 — every row in this mart IS a missing patient. Exists so the
+          metric() runtime can sum() a total and use it as a rate denominator.
+      - name: recapture_needs_sched
+        data_type: int
+        description: >
+          1 when is_recapture = 1 AND no_2026_visit = 1 — the priority
+          recapture worklist (missing recapture with no visit scheduled).
+      - name: suspect_needs_sched
+        data_type: int
+        description: >
+          1 when is_suspect = 1 AND no_2026_visit = 1 — the priority suspect
+          worklist (missing suspect with no visit scheduled).
+      - name: source_updated_at
+        data_type: timestamp
+        description: Build watermark (current_timestamp at model run) for servingdb freshness tracking.

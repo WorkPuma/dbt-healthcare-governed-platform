@@ -1,0 +1,44 @@
+version: 2
+
+# Source — DEV-4296 PAYOR_C sidecar glossary.
+#
+# Prod home: databricks_prod.seeds.seed_payor_gamma_accepted_codes (113,872 rows: code -> measure
+# + layout_location, MY2026). Fixed to databricks_prod like every other source (payor,
+# athenahealth, mdm) — dev/local reads the prod copy. Refreshed ~annually from
+# HUM-001/data/coding_glossary.csv:
+#   - prod: run the /Users/<you>/load_payor_gamma_glossary_prod notebook (copies dev seeds -> prod seeds)
+#   - dev bootstrap (optional): HUM-001/scripts/load_payor_gamma_accepted_codes.py (-> dev_gyasi.seeds)
+#
+# CONVENTION (sole-author): lands in the single `seeds` schema — NO `external` schema;
+# external/reference nature is carried on `tags`, not a schema split.
+
+sources:
+  - name: payor_gamma_glossary
+    description: >
+      PAYOR_C MY2026 coding-glossary sidecar seed. One row per accepted code x measure,
+      with layout_location routing for the 49-column Standard Supplemental Data file.
+    database: databricks_prod
+    schema: seeds
+    tables:
+      - name: seed_payor_gamma_accepted_codes
+        config:
+          tags: ["external", "reference", "PAYOR_C", "dev-4296"]
+        description: >
+          PAYOR_C accepted-code -> measure glossary (113,872 rows), loaded from
+          HUM-001/data/coding_glossary.csv by
+          HUM-001/scripts/load_payor_gamma_accepted_codes.py. Columns: code, measure,
+          code_system, value_set_desc, layout_location.
+        columns:
+          - name: code
+            description: "Accepted code (ICD/CPT/SNOMED/LOINC/HCPCS etc), dotted for ICD (e.g. 'E11.9')."
+            data_tests: [not_null]
+          - name: measure
+            description: "PAYOR_C HEDIS measure abbreviation this code satisfies (e.g. 'KED', 'COL-E')."
+            data_tests: [not_null]
+          - name: code_system
+            description: "PAYOR_C CODE_SYSTEM_CD (e.g. 'ICD10CM', 'CPT', 'SNOMED CT US Edition')."
+            data_tests: [not_null]
+          - name: value_set_desc
+            description: "PAYOR_C HEDIS value-set description; drives col_modality / ked_part / exclusion parsing downstream."
+          - name: layout_location
+            description: "Canonicalized 49-col layout column this code routes to (e.g. 'ICD Diagnosis Code', 'CPT/CPTII/HCPCS Code')."

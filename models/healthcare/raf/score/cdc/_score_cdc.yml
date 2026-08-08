@@ -1,0 +1,84 @@
+version: 2
+
+models:
+  - name: log_raf__score_events
+    description: >
+      CDC Event Log: RAF Score Events. Append-only incremental model capturing
+      every RAF-impacting change by diffing current int_raf__scored_hccs against
+      _log_raf__prior_snapshot. Grain: one row per event_id.
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: event_timestamp
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: event_id
+        description: "Unique event identifier (Primary Key)"
+        tests:
+          - unique:
+              config:
+                where: "event_timestamp >= '2026-04-07'"
+          - not_null
+
+  - name: log_raf__factor_audit
+    description: >
+      Factor Audit Log: Business-level scoring decision tracking. Append-only
+      log capturing WHY specific RAF factor decisions were made. Complements
+      log_raf__score_events (WHAT changed) with business REASONING.
+      Grain: one row per audit_id.
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: audit_timestamp
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: audit_id
+        description: "Unique audit record identifier (Primary Key)"
+        tests:
+          - unique:
+              config:
+                where: "audit_timestamp >= '2026-04-08T14:25:00Z'"
+          - not_null
+
+  - name: log_raf__pipeline_events
+    description: >
+      Pipeline Event Log: Technical pipeline execution tracking. Append-only
+      log of every RAF pipeline execution with timing, record counts, and outcome.
+      Written by the Prefect orchestrator after each dbt run completes.
+      Grain: one row per event_id.
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: event_timestamp
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: event_id
+        description: "Unique pipeline event identifier (Primary Key)"
+        tests:
+          - unique
+          - not_null
+
+  - name: _log_raf__prior_snapshot
+    description: >
+      CDC prior-run snapshot of int_raf__scored_hccs for RAF score event diffing.
+      Grain: patient × coded_year × eligibility_segment × hcc_code.
+    config:
+      tags: ["raf", "cdc", "snapshot"]
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests:
+          - not_null
+      - name: hcc_code
+        description: CMS Hierarchical Condition Category (HCC) code.
+        tests:
+          - not_null

@@ -1,0 +1,53 @@
+hcc_code,diagnosis_category,condition
+HCC54,ABS,Substance Use Disorder
+HCC55,ABS,Substance Use Disorder
+HCC56,ABS,Substance Use Disorder
+HCC188,ART,Artificial Openings for Feeding or Elimination
+HCC114,ASP,Aspiration
+HCC8,CAN,CANCER
+HCC9,CAN,CANCER
+HCC10,CAN,CANCER
+HCC11,CAN,CANCER
+HCC12,CAN,CANCER
+HCC85,CHF,Congestive Heart Failure
+HCC110,COPD,Chronic Obstructive Pulmonary Disease
+HCC111,COPD,Chronic Obstructive Pulmonary Disease
+HCC112,COPD,Chronic Obstructive Pulmonary Disease
+HCC82,CRF,Cardiorespiratory Failure
+HCC83,CRF,Cardiorespiratory Failure
+HCC84,CRF,Cardiorespiratory Failure
+HCC161,CUS,"Chronic Ulcer of the Skin, Except Pressure Ulcer"
+HCC17,DIA,DIABETES
+HCC18,DIA,DIABETES
+HCC19,DIA,DIABETES
+HCC900,DIS,Disabled
+HCC901,DIS,Disabled
+HCC902,DIS,Disabled
+HCC903,DIS,Disabled
+HCC904,DIS,Disabled
+HCC912,DIS,Disabled
+HCC913,DIS,Disabled
+HCC914,DIS,Disabled
+HCC915,DIS,Disabled
+HCC916,DIS,Disabled
+HCC47,IMM,Immune Disorders
+HCC77,MSS,Multiple Sclerosis
+HCC77,MSS,Multiple Sclerosis
+HCC39,NEC,Bone/Joint Muscle Infections/Necrosis
+HCC6,OPP,Opportunistic Infections
+HCC57,PSY,Psych
+HCC58,PSY,Psych
+HCC59,PSY,Psych
+HCC60,PSY,Psych
+HCC134,REN,Renal
+HCC135,REN,Renal
+HCC136,REN,Renal
+HCC137,REN,Renal
+HCC138,REN,Renal
+HCC57,SCH,SCHIZOPHRENIA
+HCC79,SEI,SEIZURES
+HCC2,SEP,SEPSIS
+HCC96,SHA,Heart Arrhythmias
+HCC157,ULC,Pressure Ulcer
+HCC158,ULC,Pressure Ulcer
+HCC159,ULC,Pressure Ulcer

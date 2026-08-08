@@ -1,0 +1,31 @@
+version: 2
+
+seeds:
+  - name: ref_critical_model_grains
+    description: >
+      Registry of critical model grains for meta-guard uniqueness tests.
+      Each row defines a model and its grain columns (grain_col_1..4).
+      Update when promoting a new mart or changing documented grain.
+      Incremental-model grain coverage for all first-party incrementals is
+      owned by ref_incremental_model_contracts (documented_grain /
+      declared_unique_key); this seed stays a small hand-picked critical set
+      so test_critical_model_grain_uniqueness remains CI-bounded.
+    config:
+      schema: audit
+      tags: ["audit", "grain", "meta_guard"]
+    columns:
+      - name: model_name
+        description: "dbt model name"
+        tests:
+          - not_null
+          - unique
+      - name: grain_col_1
+        description: "Primary grain column"
+        tests:
+          - not_null
+      - name: grain_col_2
+        description: "Optional second grain column"
+      - name: grain_col_3
+        description: "Optional third grain column"
+      - name: grain_col_4
+        description: "Optional fourth grain column"

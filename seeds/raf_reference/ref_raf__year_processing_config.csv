@@ -1,0 +1,4 @@
+assessment_year,is_active,is_permanent,stopped_date,created_date,notes
+2024,false,true,2025-01-01 00:00:00,2026-01-09 04:40:15.347,Annual only - Athena launched Oct 2024. PERMANENT - never reprocess.
+2025,true,false,,2026-01-09 04:40:15.347,Monthly snapshots - late claims still arriving in 2026. Will become PERMANENT when --stop-previous-year is run.
+2026,true,false,,2026-01-09 04:40:15.347,Current year - active monthly processing.

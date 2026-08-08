@@ -1,0 +1,89 @@
+source: CMS.gov 2026 Model Software - CMS-HCC V2825.115.T2
+model_version: V28
+payment_year: 2026
+normalization_factor: 1.067
+coding_intensity_adjustment: 0.059
+last_updated: '2026-02-15'
+updated_by: data_engineering
+cms_download_date: '2026-02-15'
+files:
+  cms_hcc_v28__all_coefficients.csv:
+    cms_source: C2824T2N.csv
+    description: All coefficient types (demographic, disease, interaction, count)
+      for all 9 segments
+    expected_rows_min: 1200
+    expected_rows_max: 1300
+    sha256: fda89b2af544e84e8f449db05373c5f9354c226bdf93ec1d641cedaca7332168
+  cms_hcc_v28__hierarchy_exclusions.csv:
+    cms_source: V28115H1.TXT (SAS macro)
+    description: HCC hierarchy exclusion rules (parent HCC excludes child HCC)
+    expected_rows_min: 140
+    expected_rows_max: 160
+    sha256: a24dd2b342a76cfcd93f9d0eb19a54d0f6a64e923da9e2d7d0feffacf8ef14ad
+  cms_hcc_v28__diagnostic_categories.csv:
+    cms_source: V2825T1M.TXT lines 458-468 (SAS macro)
+    description: CMS diagnostic category group definitions - maps HCC codes to named
+      groups
+    expected_rows_min: 40
+    expected_rows_max: 60
+    sha256: 60158c111ba28631326330444cba16f8408d17ab159e261f405a6a93b94fce14
+  cms_hcc_v28__interaction_definitions.csv:
+    cms_source: V2825T1M.TXT lines 471-483 (SAS macro)
+    description: CMS interaction pair definitions - which diagnostic category pairs
+      form interactions
+    expected_rows_min: 10
+    expected_rows_max: 15
+    sha256: cd6890d931f8a2daa13cc202ec729b09e9d37aadfd97dc4fa1b37fdc35e71539
+  cms_hcc_v28__interaction_factors.csv:
+    cms_source: C2824T2N.csv (interaction coefficient rows)
+    description: HCC-HCC disease interaction coefficients by enrollment segment
+    expected_rows_min: 35
+    expected_rows_max: 50
+    sha256: c8ccbd998ddf3a5e013c57255fd9ff6b5281ea59dfd4694404002bd145209e63
+  cms_hcc_v28__hcc_labels.csv:
+    cms_source: V28115L3.TXT (SAS macro)
+    description: HCC code labels and descriptions
+    expected_rows_min: 80
+    expected_rows_max: 200
+    sha256: 1c36d82c641f6393927666f81f70db2b047e99bac33d2e5c7e8ed21c933c7c75
+  cms_hcc_v28__icd10_mappings.csv:
+    cms_source: F2825T1N.TXT (SAS format)
+    description: ICD-10-CM to HCC mapping crosswalk
+    expected_rows_min: 5000
+    expected_rows_max: 12000
+    sha256: 53d97e2d5cec6f100afcc067b23734618a134fb0209423438b8b06bda7e497e4
+  cms_hcc_v28__normalization_params.csv:
+    cms_source: CY2026 Rate Announcement
+    description: CMS normalization factor and coding intensity parameters
+    expected_rows_min: 1
+    expected_rows_max: 20
+    sha256: 130e15e70aef327edcd63199bc1bd87e4e05727f3d7144fb38174ede8dbd5516
+  cms_hcc_v28__count_factors.csv:
+    cms_source: C2824T2N.csv (count coefficient rows)
+    description: HCC count payment factors by eligibility segment (derived from all_coefficients)
+    expected_rows_min: 10
+    expected_rows_max: 200
+    sha256: d35d0436ca87ae256c4d2e4b3f37d6f3508aa57cfc0178f72ccdc2c675db9937
+  cms_hcc_v28__demographic_coefficients.csv:
+    cms_source: C2824T2N.csv (demographic coefficient rows)
+    description: Age/sex demographic coefficients by eligibility segment (derived
+      from all_coefficients)
+    expected_rows_min: 100
+    expected_rows_max: 500
+    sha256: e77101bbafc6952afb45c86acec9166f332d45ad891f97ff22a125376a20644f
+  cms_hcc_v28__disease_coefficients.csv:
+    cms_source: C2824T2N.csv (disease coefficient rows)
+    description: Disease/HCC coefficients by eligibility segment (derived from all_coefficients)
+    expected_rows_min: 500
+    expected_rows_max: 1500
+    sha256: bedc7f6636f04d32a3eceef2464fde4dc3adcde5da1e6ada44401d4600a93ca6
+  cms_hcc_v28__age_sex_edits.csv:
+    cms_source: V28115*.TXT (CC age/sex split logic, I0V04ED3-equivalent edit macro)
+    description: CMS-HCC V28 age/sex edit rules. A diagnosis whose enrollee fails
+      the required sex or age band for its HCC is dropped before hierarchy/scoring,
+      matching the CMS edit step. For the aged/disabled Medicare population the only
+      binding category is HCC111 (Hemophilia, Male). MCE sex conditions were deactivated
+      by CMS as of FY2025 (10/1/2024); this layer covers the residual CC sex/age splits.
+    expected_rows_min: 1
+    expected_rows_max: 20
+    sha256: a7df9c0632ad1ad1ad10955f6965940d327743931e1736a96c762be2c491d93f

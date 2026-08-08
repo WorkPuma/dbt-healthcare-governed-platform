@@ -1,0 +1,5 @@
+payor,source_claim_type,claim_type_carin,claim_setting
+PAYOR_A,PR,professional,professional
+PAYOR_A,IP,institutional,inpatient
+PAYOR_A,OP,outpatient,outpatient
+PAYOR_A,RX,pharmacy,pharmacy

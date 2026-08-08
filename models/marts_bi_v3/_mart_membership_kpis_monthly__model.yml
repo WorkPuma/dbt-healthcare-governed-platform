@@ -1,0 +1,228 @@
+version: 2
+
+# =====================================================================
+# Model contract + semantic model for mart_membership_kpis_monthly.
+#
+# Powers the ServingDB metric() runtime in marts_bi_v3 for the V3
+# Membership KPI dashboard. Built in Databricks, replicated to ServingDB
+# via CDF-managed sync (TRIGGERED mode).
+#
+# All metrics here are SIMPLE measures. Ratios (membership_telehealth_pct,
+# membership_visit_first_90d_pct, nps_score, monthly_churn_rate, etc.)
+# are composed at query time by the marts_bi_v3.metric() runtime using
+# rate / rate_distinct agg types — never averaged across months.
+# =====================================================================
+
+models:
+  - name: mart_membership_kpis_monthly
+    description: >
+      Monthly pre-aggregated Membership KPI fact. One row per
+      snapshot_month × filter dimensions (patient_status, member_category,
+      enrollment_status, membership_membership_status, clinic, primary_care_provider,
+      payment_status). Replaces the V2 cube `membership_kpis` federated
+      view + the V3 PL/pgSQL function marts_bi_v3.membership_kpis_aggregate
+      with a single dbt mart. Combines the membership_monthly_snapshot
+      panel composition with the appointment-derived visit measures and
+      the patient-experience NPS surveys, so every membership-KPI
+      measure resolves from one wide row per month.
+    config:
+      tags: ["marts_bi_v3", "cube", "BIPlatform", "v3_synced"]
+      contract:
+        enforced: true
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: mart_membership_kpis_monthly_id
+        data_type: string
+        description: "Surrogate hash PK (md5 of period_start + all filter dimensions)."
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: period_start
+        data_type: date
+        description: "Snapshot month (first day of the month)."
+        constraints:
+          - type: not_null
+        granularity: month
+      - name: patient_status
+        data_type: string
+        description: "Athena patient status at month-end (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: member_category
+        data_type: string
+        description: "Established vs Net New Member (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: enrollment_status
+        data_type: string
+        description: "Membership enrollment status at month-end (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: membership_membership_status
+        data_type: string
+        description: "Membership membership status at month-end (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: clinic
+        data_type: string
+        description: "Preferred clinic at month-end (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: primary_care_provider
+        data_type: string
+        description: "Primary care provider at month-end (filter dimension)."
+        constraints:
+          - type: not_null
+      - name: payment_status
+        data_type: string
+        description: "Resolved payment status at month-end (Paying / Grandmothered / Converted; filter dimension)."
+        constraints:
+          - type: not_null
+
+      # === Panel composition (from membership_monthly_snapshot) ===
+      - name: total_members_eom
+        data_type: bigint
+        description: "Distinct canonical BackendBaaS-or-Membership member accounts at month-end."
+      - name: active_members_eom
+        data_type: bigint
+        description: "Canonically active members whose patient status is Active at month-end."
+      - name: net_new_members_eom
+        data_type: bigint
+        description: "Members classified as 'Net New Member' (post-program-launch)."
+      - name: established_members_eom
+        data_type: bigint
+        description: "Members classified as 'Established' (pre-program-launch patients converted)."
+      - name: declined_eom
+        data_type: bigint
+        description: "Members who declined after program start."
+      - name: inactive_members_eom
+        data_type: bigint
+        description: "Members in 'Inactive Member' enrollment with a prior Membership agreement."
+
+      # === Payment status splits ===
+      - name: paying_members_eom
+        data_type: bigint
+        description: "Members in payment_status_resolved = 'Paying Member' at month-end."
+      - name: paying_members_eom_prev
+        data_type: bigint
+        description: "paying_members_eom of the immediately prior month (LAG over period_start). Denominator for membership_monthly_churn_rate composed by metric() as agg=rate, num=churned_paying_eom, denom=paying_members_eom_prev."
+      - name: gm_members_eom
+        data_type: bigint
+        description: "Members in payment_status_resolved = 'Grandmothered Member' at month-end."
+      - name: converted_members_eom
+        data_type: bigint
+        description: "Members who transitioned Grandmothered → Paying (sticky)."
+      - name: paying_billable_members_eom
+        data_type: bigint
+        description: "Distinct accounts that are 'Paying Member' with an active enrollment status ('Active Member' / 'Active Member - Waived') at month-end — paying members on a billable plan."
+      - name: new_paying_members_eom
+        data_type: bigint
+        description: "Members who became Paying this specific month."
+      - name: new_gm_members_eom
+        data_type: bigint
+        description: "Approximation of new Grandmothered Members this month (parity with V2 cube — sticky GM count)."
+      - name: churned_paying_eom
+        data_type: bigint
+        description: "Paying / Converted members whose Salesforce Account flipped to non-Active this month."
+      - name: cancellation_30day_count_eom
+        data_type: bigint
+        description: >
+          Distinct accounts whose `became_inactive_date` falls in the trailing
+          30 days ending at the snapshot month's EOM, gated on
+          `became_inactive_date >= membership_member_since`. Numerator for the
+          `membership_cancellation_30_day_rate` metric (denominator is
+          `active_members_eom`). See `docs/v3-staging-changelog.md` for the
+          2026-05-16 product decision behind the gate.
+      - name: net_paying_growth_eom
+        data_type: bigint
+        description: "new_paying_members_eom − churned_paying_eom. new_paying includes GM→Paying transitions and Paying members whose membership_member_since falls in the snapshot month."
+
+      # === Plan cadence + classification ===
+      - name: monthly_plan_active_members_eom
+        data_type: bigint
+        description: "Canonically active members with a Membership record on the monthly billing cadence."
+      - name: annual_plan_active_members_eom
+        data_type: bigint
+        description: "Canonically active members with a Membership record on the annual billing cadence."
+      - name: legacy_members_eom
+        data_type: bigint
+        description: "Legacy members at month-end: Membership-inferred before July 2026 and BackendBaaS-authoritative from July 2026 onward."
+      - name: standard_members_eom
+        data_type: bigint
+        description: "Active Membership-authoritative paying members at month-end."
+
+      # === Revenue ===
+      - name: mrr_total_dollars
+        data_type: numeric
+        description: "Sum of membership_monthly_revenue across all Active / Active - Waived members at month-end. Active - Waived contributes $0 by construction. Mirrors V2 cube measure base_patients.membership_mrr."
+      - name: mrr_paying_dollars
+        data_type: numeric
+        description: "Sum of membership_monthly_revenue restricted to payment_status_resolved IN ('Paying Member', 'Converted Member'). Mirrors V2 cube measure base_membership.membership_mrr_paying."
+      - name: paying_avg_tenure_months_eom
+        data_type: decimal(22,8)
+        description: "Average tenure in months (snapshot month − membership_member_since) across paying members at month-end. Tenure component of ltv_paying_dollars. Decimal(22,8) reflects the AVG aggregate widening of the per-row numeric(18,4) tenure."
+      - name: ltv_paying_dollars
+        data_type: decimal(18,2)
+        description: "Estimated paying-member lifetime value: mrr_paying_dollars / paying_members_eom × paying_avg_tenure_months_eom (0 when no paying members)."
+
+      # === Demographics + tenure ===
+      - name: avg_age_eom
+        data_type: numeric
+        description: "Average age of members in the panel."
+      - name: avg_days_since_visit_eom
+        data_type: numeric
+        description: "Average days since the member's last completed visit at month-end."
+
+      # === Annual renewal funnel ===
+      - name: annual_renewal_eligible_members_eom
+        data_type: bigint
+        description: "Active Annual-plan members with ≥12 months of tenure (renewal-eligible window)."
+      - name: annual_renewed_members_eom
+        data_type: bigint
+        description: "Renewed Annual-plan members in the same eligible window (approximation; see SQL note)."
+
+      # === Appointment-derived visit measures ===
+      - name: membership_completed_visits
+        data_type: bigint
+        description: "Distinct completed appointments where the patient was a Membership-activated membership patient at appt time."
+      - name: membership_telehealth_visits
+        data_type: bigint
+        description: "Subset of membership_completed_visits that were telehealth."
+      - name: membership_bh_visits
+        data_type: bigint
+        description: "Subset of membership_completed_visits that were behavioral health."
+      - name: membership_unique_patients_seen
+        data_type: bigint
+        description: "Distinct members who completed at least one visit in the month."
+      - name: membership_active_member_population
+        data_type: bigint
+        description: "Distinct patients flagged as active members (denominator for visit utilization rates)."
+      - name: membership_members_with_visit_first_90d
+        data_type: bigint
+        description: "Members whose completed visit fell within the first 90 days of their membership_member_since date."
+
+      # === NPS surveys ===
+      - name: nps_response_count
+        data_type: bigint
+        description: "Distinct NPS survey responses received this month."
+      - name: nps_promoters
+        data_type: bigint
+        description: "Surveys categorized as Promoter."
+      - name: nps_detractors
+        data_type: bigint
+        description: "Surveys categorized as Detractor."
+      - name: nps_delta
+        data_type: bigint
+        description: "nps_promoters − nps_detractors. Combined with nps_response_count gives NPS score = SUM(nps_delta)/SUM(nps_response_count)*100 at metric() query time."
+
+      - name: source_updated_at
+        data_type: timestamp
+        description: "Watermark used by incremental replace_where window overwrite — max across the joined source watermarks."

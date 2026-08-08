@@ -1,0 +1,785 @@
+coefficient_key,coefficient_value,coefficient_type,cms_label
+CNA_HCC1,0.335,disease,HIV/AIDS
+CND_HCC1,0.287,disease,HIV/AIDS
+CFA_HCC1,0.595,disease,HIV/AIDS
+CFD_HCC1,0.396,disease,HIV/AIDS
+CPA_HCC1,0.482,disease,HIV/AIDS
+CPD_HCC1,0.200,disease,HIV/AIDS
+INS_HCC1,1.722,disease,HIV/AIDS
+CNA_HCC2,0.352,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CND_HCC2,0.414,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CFA_HCC2,0.453,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CFD_HCC2,0.530,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CPA_HCC2,0.316,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CPD_HCC2,0.297,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+INS_HCC2,0.324,disease,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+CNA_HCC6,0.424,disease,Opportunistic Infections
+CND_HCC6,0.740,disease,Opportunistic Infections
+CFA_HCC6,0.572,disease,Opportunistic Infections
+CFD_HCC6,0.803,disease,Opportunistic Infections
+CPA_HCC6,0.318,disease,Opportunistic Infections
+CPD_HCC6,0.658,disease,Opportunistic Infections
+INS_HCC6,0.534,disease,Opportunistic Infections
+CNA_HCC8,2.659,disease,Metastatic Cancer and Acute Leukemia
+CND_HCC8,2.714,disease,Metastatic Cancer and Acute Leukemia
+CFA_HCC8,2.566,disease,Metastatic Cancer and Acute Leukemia
+CFD_HCC8,2.801,disease,Metastatic Cancer and Acute Leukemia
+CPA_HCC8,2.455,disease,Metastatic Cancer and Acute Leukemia
+CPD_HCC8,2.659,disease,Metastatic Cancer and Acute Leukemia
+INS_HCC8,1.303,disease,Metastatic Cancer and Acute Leukemia
+CNA_HCC9,1.024,disease,Lung and Other Severe Cancers
+CND_HCC9,0.910,disease,Lung and Other Severe Cancers
+CFA_HCC9,1.010,disease,Lung and Other Severe Cancers
+CFD_HCC9,1.001,disease,Lung and Other Severe Cancers
+CPA_HCC9,1.001,disease,Lung and Other Severe Cancers
+CPD_HCC9,0.880,disease,Lung and Other Severe Cancers
+INS_HCC9,0.623,disease,Lung and Other Severe Cancers
+CNA_HCC10,0.675,disease,Lymphoma and Other Cancers
+CND_HCC10,0.663,disease,Lymphoma and Other Cancers
+CFA_HCC10,0.717,disease,Lymphoma and Other Cancers
+CFD_HCC10,0.756,disease,Lymphoma and Other Cancers
+CPA_HCC10,0.648,disease,Lymphoma and Other Cancers
+CPD_HCC10,0.667,disease,Lymphoma and Other Cancers
+INS_HCC10,0.461,disease,Lymphoma and Other Cancers
+CNA_HCC11,0.307,disease,"Colorectal, Bladder, and Other Cancers"
+CND_HCC11,0.345,disease,"Colorectal, Bladder, and Other Cancers"
+CFA_HCC11,0.317,disease,"Colorectal, Bladder, and Other Cancers"
+CFD_HCC11,0.355,disease,"Colorectal, Bladder, and Other Cancers"
+CPA_HCC11,0.330,disease,"Colorectal, Bladder, and Other Cancers"
+CPD_HCC11,0.351,disease,"Colorectal, Bladder, and Other Cancers"
+INS_HCC11,0.294,disease,"Colorectal, Bladder, and Other Cancers"
+CNA_HCC12,0.150,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CND_HCC12,0.212,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CFA_HCC12,0.158,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CFD_HCC12,0.212,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CPA_HCC12,0.154,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CPD_HCC12,0.181,disease,"Breast, Prostate, and Other Cancers and Tumors"
+INS_HCC12,0.210,disease,"Breast, Prostate, and Other Cancers and Tumors"
+CNA_HCC17,0.302,disease,Diabetes with Acute Complications
+CND_HCC17,0.351,disease,Diabetes with Acute Complications
+CFA_HCC17,0.340,disease,Diabetes with Acute Complications
+CFD_HCC17,0.423,disease,Diabetes with Acute Complications
+CPA_HCC17,0.326,disease,Diabetes with Acute Complications
+CPD_HCC17,0.373,disease,Diabetes with Acute Complications
+INS_HCC17,0.440,disease,Diabetes with Acute Complications
+CNA_HCC18,0.302,disease,Diabetes with Chronic Complications
+CND_HCC18,0.351,disease,Diabetes with Chronic Complications
+CFA_HCC18,0.340,disease,Diabetes with Chronic Complications
+CFD_HCC18,0.423,disease,Diabetes with Chronic Complications
+CPA_HCC18,0.326,disease,Diabetes with Chronic Complications
+CPD_HCC18,0.373,disease,Diabetes with Chronic Complications
+INS_HCC18,0.440,disease,Diabetes with Chronic Complications
+CNA_HCC19,0.105,disease,Diabetes without Complication
+CND_HCC19,0.124,disease,Diabetes without Complication
+CFA_HCC19,0.107,disease,Diabetes without Complication
+CFD_HCC19,0.145,disease,Diabetes without Complication
+CPA_HCC19,0.087,disease,Diabetes without Complication
+CPD_HCC19,0.122,disease,Diabetes without Complication
+INS_HCC19,0.178,disease,Diabetes without Complication
+CNA_HCC21,0.455,disease,Protein-Calorie Malnutrition
+CND_HCC21,0.674,disease,Protein-Calorie Malnutrition
+CFA_HCC21,0.693,disease,Protein-Calorie Malnutrition
+CFD_HCC21,0.723,disease,Protein-Calorie Malnutrition
+CPA_HCC21,0.457,disease,Protein-Calorie Malnutrition
+CPD_HCC21,0.679,disease,Protein-Calorie Malnutrition
+INS_HCC21,0.267,disease,Protein-Calorie Malnutrition
+CNA_HCC22,0.250,disease,Morbid Obesity
+CND_HCC22,0.183,disease,Morbid Obesity
+CFA_HCC22,0.383,disease,Morbid Obesity
+CFD_HCC22,0.297,disease,Morbid Obesity
+CPA_HCC22,0.233,disease,Morbid Obesity
+CPD_HCC22,0.204,disease,Morbid Obesity
+INS_HCC22,0.455,disease,Morbid Obesity
+CNA_HCC23,0.194,disease,Other Significant Endocrine and Metabolic Disorders
+CND_HCC23,0.378,disease,Other Significant Endocrine and Metabolic Disorders
+CFA_HCC23,0.211,disease,Other Significant Endocrine and Metabolic Disorders
+CFD_HCC23,0.299,disease,Other Significant Endocrine and Metabolic Disorders
+CPA_HCC23,0.174,disease,Other Significant Endocrine and Metabolic Disorders
+CPD_HCC23,0.319,disease,Other Significant Endocrine and Metabolic Disorders
+INS_HCC23,0.379,disease,Other Significant Endocrine and Metabolic Disorders
+CNA_HCC27,0.882,disease,End-Stage Liver Disease
+CND_HCC27,1.065,disease,End-Stage Liver Disease
+CFA_HCC27,1.111,disease,End-Stage Liver Disease
+CFD_HCC27,1.101,disease,End-Stage Liver Disease
+CPA_HCC27,0.729,disease,End-Stage Liver Disease
+CPD_HCC27,0.887,disease,End-Stage Liver Disease
+INS_HCC27,0.874,disease,End-Stage Liver Disease
+CNA_HCC28,0.363,disease,Cirrhosis of Liver
+CND_HCC28,0.334,disease,Cirrhosis of Liver
+CFA_HCC28,0.411,disease,Cirrhosis of Liver
+CFD_HCC28,0.365,disease,Cirrhosis of Liver
+CPA_HCC28,0.403,disease,Cirrhosis of Liver
+CPD_HCC28,0.341,disease,Cirrhosis of Liver
+INS_HCC28,0.485,disease,Cirrhosis of Liver
+CNA_HCC29,0.147,disease,Chronic Hepatitis
+CND_HCC29,0.314,disease,Chronic Hepatitis
+CFA_HCC29,0.042,disease,Chronic Hepatitis
+CFD_HCC29,0.292,disease,Chronic Hepatitis
+CPA_HCC29,0.181,disease,Chronic Hepatitis
+CPD_HCC29,0.238,disease,Chronic Hepatitis
+INS_HCC29,0.485,disease,Chronic Hepatitis
+CNA_HCC33,0.219,disease,Intestinal Obstruction/Perforation
+CND_HCC33,0.503,disease,Intestinal Obstruction/Perforation
+CFA_HCC33,0.258,disease,Intestinal Obstruction/Perforation
+CFD_HCC33,0.538,disease,Intestinal Obstruction/Perforation
+CPA_HCC33,0.232,disease,Intestinal Obstruction/Perforation
+CPD_HCC33,0.552,disease,Intestinal Obstruction/Perforation
+INS_HCC33,0.352,disease,Intestinal Obstruction/Perforation
+CNA_HCC34,0.287,disease,Chronic Pancreatitis
+CND_HCC34,0.580,disease,Chronic Pancreatitis
+CFA_HCC34,0.349,disease,Chronic Pancreatitis
+CFD_HCC34,0.762,disease,Chronic Pancreatitis
+CPA_HCC34,0.371,disease,Chronic Pancreatitis
+CPD_HCC34,0.597,disease,Chronic Pancreatitis
+INS_HCC34,0.422,disease,Chronic Pancreatitis
+CNA_HCC35,0.308,disease,Inflammatory Bowel Disease
+CND_HCC35,0.523,disease,Inflammatory Bowel Disease
+CFA_HCC35,0.275,disease,Inflammatory Bowel Disease
+CFD_HCC35,0.551,disease,Inflammatory Bowel Disease
+CPA_HCC35,0.275,disease,Inflammatory Bowel Disease
+CPD_HCC35,0.543,disease,Inflammatory Bowel Disease
+INS_HCC35,0.355,disease,Inflammatory Bowel Disease
+CNA_HCC39,0.401,disease,Bone/Joint/Muscle Infections/Necrosis
+CND_HCC39,0.378,disease,Bone/Joint/Muscle Infections/Necrosis
+CFA_HCC39,0.558,disease,Bone/Joint/Muscle Infections/Necrosis
+CFD_HCC39,0.682,disease,Bone/Joint/Muscle Infections/Necrosis
+CPA_HCC39,0.443,disease,Bone/Joint/Muscle Infections/Necrosis
+CPD_HCC39,0.435,disease,Bone/Joint/Muscle Infections/Necrosis
+INS_HCC39,0.401,disease,Bone/Joint/Muscle Infections/Necrosis
+CNA_HCC40,0.421,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CND_HCC40,0.367,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CFA_HCC40,0.371,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CFD_HCC40,0.328,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CPA_HCC40,0.347,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CPD_HCC40,0.264,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+INS_HCC40,0.292,disease,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+CNA_HCC46,1.372,disease,Severe Hematological Disorders
+CND_HCC46,3.566,disease,Severe Hematological Disorders
+CFA_HCC46,1.214,disease,Severe Hematological Disorders
+CFD_HCC46,4.309,disease,Severe Hematological Disorders
+CPA_HCC46,1.234,disease,Severe Hematological Disorders
+CPD_HCC46,4.138,disease,Severe Hematological Disorders
+INS_HCC46,0.799,disease,Severe Hematological Disorders
+CNA_HCC47,0.665,disease,Disorders of Immunity
+CND_HCC47,0.860,disease,Disorders of Immunity
+CFA_HCC47,0.452,disease,Disorders of Immunity
+CFD_HCC47,0.691,disease,Disorders of Immunity
+CPA_HCC47,0.674,disease,Disorders of Immunity
+CPD_HCC47,0.594,disease,Disorders of Immunity
+INS_HCC47,0.576,disease,Disorders of Immunity
+CNA_HCC48,0.192,disease,Coagulation Defects and Other Specified Hematological Disorders
+CND_HCC48,0.312,disease,Coagulation Defects and Other Specified Hematological Disorders
+CFA_HCC48,0.221,disease,Coagulation Defects and Other Specified Hematological Disorders
+CFD_HCC48,0.298,disease,Coagulation Defects and Other Specified Hematological Disorders
+CPA_HCC48,0.186,disease,Coagulation Defects and Other Specified Hematological Disorders
+CPD_HCC48,0.330,disease,Coagulation Defects and Other Specified Hematological Disorders
+INS_HCC48,0.190,disease,Coagulation Defects and Other Specified Hematological Disorders
+CNA_HCC51,0.346,disease,Dementia With Complications
+CND_HCC51,0.224,disease,Dementia With Complications
+CFA_HCC51,0.453,disease,Dementia With Complications
+CFD_HCC51,0.256,disease,Dementia With Complications
+CPA_HCC51,0.420,disease,Dementia With Complications
+CPD_HCC51,0.257,disease,Dementia With Complications
+INS_HCC51,0.000,disease,Dementia With Complications
+CNA_HCC52,0.346,disease,Dementia Without Complication
+CND_HCC52,0.224,disease,Dementia Without Complication
+CFA_HCC52,0.453,disease,Dementia Without Complication
+CFD_HCC52,0.256,disease,Dementia Without Complication
+CPA_HCC52,0.420,disease,Dementia Without Complication
+CPD_HCC52,0.257,disease,Dementia Without Complication
+INS_HCC52,0.000,disease,Dementia Without Complication
+CNA_HCC54,0.329,disease,Substance Use with Psychotic Complications
+CND_HCC54,0.543,disease,Substance Use with Psychotic Complications
+CFA_HCC54,0.538,disease,Substance Use with Psychotic Complications
+CFD_HCC54,0.896,disease,Substance Use with Psychotic Complications
+CPA_HCC54,0.372,disease,Substance Use with Psychotic Complications
+CPD_HCC54,0.679,disease,Substance Use with Psychotic Complications
+INS_HCC54,0.178,disease,Substance Use with Psychotic Complications
+CNA_HCC55,0.329,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CND_HCC55,0.279,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CFA_HCC55,0.538,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CFD_HCC55,0.356,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CPA_HCC55,0.372,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CPD_HCC55,0.275,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+INS_HCC55,0.178,disease,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+CNA_HCC56,0.329,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CND_HCC56,0.247,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CFA_HCC56,0.538,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CFD_HCC56,0.348,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CPA_HCC56,0.372,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CPD_HCC56,0.275,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+INS_HCC56,0.178,disease,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+CNA_HCC57,0.524,disease,Schizophrenia
+CND_HCC57,0.352,disease,Schizophrenia
+CFA_HCC57,0.570,disease,Schizophrenia
+CFD_HCC57,0.381,disease,Schizophrenia
+CPA_HCC57,0.495,disease,Schizophrenia
+CPD_HCC57,0.309,disease,Schizophrenia
+INS_HCC57,0.187,disease,Schizophrenia
+CNA_HCC58,0.393,disease,Reactive and Unspecified Psychosis
+CND_HCC58,0.352,disease,Reactive and Unspecified Psychosis
+CFA_HCC58,0.570,disease,Reactive and Unspecified Psychosis
+CFD_HCC58,0.231,disease,Reactive and Unspecified Psychosis
+CPA_HCC58,0.449,disease,Reactive and Unspecified Psychosis
+CPD_HCC58,0.239,disease,Reactive and Unspecified Psychosis
+INS_HCC58,0.187,disease,Reactive and Unspecified Psychosis
+CNA_HCC59,0.309,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CND_HCC59,0.164,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CFA_HCC59,0.299,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CFD_HCC59,0.127,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CPA_HCC59,0.306,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CPD_HCC59,0.109,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+INS_HCC59,0.187,disease,"Major Depressive, Bipolar, and Paranoid Disorders"
+CNA_HCC60,0.309,disease,Personality Disorders
+CND_HCC60,0.108,disease,Personality Disorders
+CFA_HCC60,0.299,disease,Personality Disorders
+CFD_HCC60,0.100,disease,Personality Disorders
+CPA_HCC60,0.255,disease,Personality Disorders
+CPD_HCC60,0.065,disease,Personality Disorders
+INS_HCC60,0.000,disease,Personality Disorders
+CNA_HCC70,1.242,disease,Quadriplegia
+CND_HCC70,1.001,disease,Quadriplegia
+CFA_HCC70,1.038,disease,Quadriplegia
+CFD_HCC70,1.000,disease,Quadriplegia
+CPA_HCC70,1.000,disease,Quadriplegia
+CPD_HCC70,1.134,disease,Quadriplegia
+INS_HCC70,0.549,disease,Quadriplegia
+CNA_HCC71,1.068,disease,Paraplegia
+CND_HCC71,0.739,disease,Paraplegia
+CFA_HCC71,0.921,disease,Paraplegia
+CFD_HCC71,0.957,disease,Paraplegia
+CPA_HCC71,1.000,disease,Paraplegia
+CPD_HCC71,0.933,disease,Paraplegia
+INS_HCC71,0.492,disease,Paraplegia
+CNA_HCC72,0.481,disease,Spinal Cord Disorders/Injuries
+CND_HCC72,0.369,disease,Spinal Cord Disorders/Injuries
+CFA_HCC72,0.532,disease,Spinal Cord Disorders/Injuries
+CFD_HCC72,0.377,disease,Spinal Cord Disorders/Injuries
+CPA_HCC72,0.512,disease,Spinal Cord Disorders/Injuries
+CPD_HCC72,0.336,disease,Spinal Cord Disorders/Injuries
+INS_HCC72,0.289,disease,Spinal Cord Disorders/Injuries
+CNA_HCC73,0.999,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CND_HCC73,1.132,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CFA_HCC73,1.101,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CFD_HCC73,1.245,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CPA_HCC73,0.687,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CPD_HCC73,0.933,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+INS_HCC73,0.476,disease,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+CNA_HCC74,0.339,disease,Cerebral Palsy
+CND_HCC74,0.098,disease,Cerebral Palsy
+CFA_HCC74,0.000,disease,Cerebral Palsy
+CFD_HCC74,0.000,disease,Cerebral Palsy
+CPA_HCC74,0.114,disease,Cerebral Palsy
+CPD_HCC74,0.000,disease,Cerebral Palsy
+INS_HCC74,0.000,disease,Cerebral Palsy
+CNA_HCC75,0.472,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CND_HCC75,0.481,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CFA_HCC75,0.407,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CFD_HCC75,0.404,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CPA_HCC75,0.287,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CPD_HCC75,0.314,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+INS_HCC75,0.332,disease,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+CNA_HCC76,0.518,disease,Muscular Dystrophy
+CND_HCC76,0.621,disease,Muscular Dystrophy
+CFA_HCC76,0.413,disease,Muscular Dystrophy
+CFD_HCC76,0.597,disease,Muscular Dystrophy
+CPA_HCC76,0.000,disease,Muscular Dystrophy
+CPD_HCC76,0.286,disease,Muscular Dystrophy
+INS_HCC76,0.356,disease,Muscular Dystrophy
+CNA_HCC77,0.423,disease,Multiple Sclerosis
+CND_HCC77,0.566,disease,Multiple Sclerosis
+CFA_HCC77,0.742,disease,Multiple Sclerosis
+CFD_HCC77,0.789,disease,Multiple Sclerosis
+CPA_HCC77,0.276,disease,Multiple Sclerosis
+CPD_HCC77,0.460,disease,Multiple Sclerosis
+INS_HCC77,0.000,disease,Multiple Sclerosis
+CNA_HCC78,0.606,disease,Parkinson's and Huntington's Diseases
+CND_HCC78,0.501,disease,Parkinson's and Huntington's Diseases
+CFA_HCC78,0.601,disease,Parkinson's and Huntington's Diseases
+CFD_HCC78,0.443,disease,Parkinson's and Huntington's Diseases
+CPA_HCC78,0.536,disease,Parkinson's and Huntington's Diseases
+CPD_HCC78,0.430,disease,Parkinson's and Huntington's Diseases
+INS_HCC78,0.159,disease,Parkinson's and Huntington's Diseases
+CNA_HCC79,0.220,disease,Seizure Disorders and Convulsions
+CND_HCC79,0.196,disease,Seizure Disorders and Convulsions
+CFA_HCC79,0.237,disease,Seizure Disorders and Convulsions
+CFD_HCC79,0.139,disease,Seizure Disorders and Convulsions
+CPA_HCC79,0.257,disease,Seizure Disorders and Convulsions
+CPD_HCC79,0.169,disease,Seizure Disorders and Convulsions
+INS_HCC79,0.065,disease,Seizure Disorders and Convulsions
+CNA_HCC80,0.486,disease,"Coma, Brain Compression/Anoxic Damage"
+CND_HCC80,0.274,disease,"Coma, Brain Compression/Anoxic Damage"
+CFA_HCC80,0.511,disease,"Coma, Brain Compression/Anoxic Damage"
+CFD_HCC80,0.105,disease,"Coma, Brain Compression/Anoxic Damage"
+CPA_HCC80,0.729,disease,"Coma, Brain Compression/Anoxic Damage"
+CPD_HCC80,0.134,disease,"Coma, Brain Compression/Anoxic Damage"
+INS_HCC80,0.000,disease,"Coma, Brain Compression/Anoxic Damage"
+CNA_HCC82,1.000,disease,Respirator Dependence/Tracheostomy Status
+CND_HCC82,0.781,disease,Respirator Dependence/Tracheostomy Status
+CFA_HCC82,2.183,disease,Respirator Dependence/Tracheostomy Status
+CFD_HCC82,1.465,disease,Respirator Dependence/Tracheostomy Status
+CPA_HCC82,0.836,disease,Respirator Dependence/Tracheostomy Status
+CPD_HCC82,0.769,disease,Respirator Dependence/Tracheostomy Status
+INS_HCC82,1.622,disease,Respirator Dependence/Tracheostomy Status
+CNA_HCC83,0.354,disease,Respiratory Arrest
+CND_HCC83,0.400,disease,Respiratory Arrest
+CFA_HCC83,0.902,disease,Respiratory Arrest
+CFD_HCC83,0.531,disease,Respiratory Arrest
+CPA_HCC83,0.361,disease,Respiratory Arrest
+CPD_HCC83,0.769,disease,Respiratory Arrest
+INS_HCC83,0.511,disease,Respiratory Arrest
+CNA_HCC84,0.282,disease,Cardio-Respiratory Failure and Shock
+CND_HCC84,0.385,disease,Cardio-Respiratory Failure and Shock
+CFA_HCC84,0.492,disease,Cardio-Respiratory Failure and Shock
+CFD_HCC84,0.531,disease,Cardio-Respiratory Failure and Shock
+CPA_HCC84,0.361,disease,Cardio-Respiratory Failure and Shock
+CPD_HCC84,0.343,disease,Cardio-Respiratory Failure and Shock
+INS_HCC84,0.313,disease,Cardio-Respiratory Failure and Shock
+CNA_HCC85,0.331,disease,Congestive Heart Failure
+CND_HCC85,0.447,disease,Congestive Heart Failure
+CFA_HCC85,0.371,disease,Congestive Heart Failure
+CFD_HCC85,0.486,disease,Congestive Heart Failure
+CPA_HCC85,0.336,disease,Congestive Heart Failure
+CPD_HCC85,0.422,disease,Congestive Heart Failure
+INS_HCC85,0.203,disease,Congestive Heart Failure
+CNA_HCC86,0.195,disease,Acute Myocardial Infarction
+CND_HCC86,0.264,disease,Acute Myocardial Infarction
+CFA_HCC86,0.377,disease,Acute Myocardial Infarction
+CFD_HCC86,0.425,disease,Acute Myocardial Infarction
+CPA_HCC86,0.293,disease,Acute Myocardial Infarction
+CPD_HCC86,0.379,disease,Acute Myocardial Infarction
+INS_HCC86,0.366,disease,Acute Myocardial Infarction
+CNA_HCC87,0.195,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CND_HCC87,0.264,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CFA_HCC87,0.302,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CFD_HCC87,0.425,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CPA_HCC87,0.276,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CPD_HCC87,0.379,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+INS_HCC87,0.366,disease,Unstable Angina and Other Acute Ischemic Heart Disease
+CNA_HCC88,0.135,disease,Angina Pectoris
+CND_HCC88,0.111,disease,Angina Pectoris
+CFA_HCC88,0.034,disease,Angina Pectoris
+CFD_HCC88,0.152,disease,Angina Pectoris
+CPA_HCC88,0.149,disease,Angina Pectoris
+CPD_HCC88,0.149,disease,Angina Pectoris
+INS_HCC88,0.366,disease,Angina Pectoris
+CNA_HCC96,0.268,disease,Specified Heart Arrhythmias
+CND_HCC96,0.262,disease,Specified Heart Arrhythmias
+CFA_HCC96,0.384,disease,Specified Heart Arrhythmias
+CFD_HCC96,0.308,disease,Specified Heart Arrhythmias
+CPA_HCC96,0.264,disease,Specified Heart Arrhythmias
+CPD_HCC96,0.281,disease,Specified Heart Arrhythmias
+INS_HCC96,0.252,disease,Specified Heart Arrhythmias
+CNA_HCC99,0.230,disease,Intracranial Hemorrhage
+CND_HCC99,0.170,disease,Intracranial Hemorrhage
+CFA_HCC99,0.380,disease,Intracranial Hemorrhage
+CFD_HCC99,0.486,disease,Intracranial Hemorrhage
+CPA_HCC99,0.230,disease,Intracranial Hemorrhage
+CPD_HCC99,0.163,disease,Intracranial Hemorrhage
+INS_HCC99,0.111,disease,Intracranial Hemorrhage
+CNA_HCC100,0.230,disease,Ischemic or Unspecified Stroke
+CND_HCC100,0.146,disease,Ischemic or Unspecified Stroke
+CFA_HCC100,0.380,disease,Ischemic or Unspecified Stroke
+CFD_HCC100,0.324,disease,Ischemic or Unspecified Stroke
+CPA_HCC100,0.230,disease,Ischemic or Unspecified Stroke
+CPD_HCC100,0.163,disease,Ischemic or Unspecified Stroke
+INS_HCC100,0.111,disease,Ischemic or Unspecified Stroke
+CNA_HCC103,0.437,disease,Hemiplegia/Hemiparesis
+CND_HCC103,0.281,disease,Hemiplegia/Hemiparesis
+CFA_HCC103,0.487,disease,Hemiplegia/Hemiparesis
+CFD_HCC103,0.296,disease,Hemiplegia/Hemiparesis
+CPA_HCC103,0.438,disease,Hemiplegia/Hemiparesis
+CPD_HCC103,0.310,disease,Hemiplegia/Hemiparesis
+INS_HCC103,0.000,disease,Hemiplegia/Hemiparesis
+CNA_HCC104,0.331,disease,"Monoplegia, Other Paralytic Syndromes"
+CND_HCC104,0.270,disease,"Monoplegia, Other Paralytic Syndromes"
+CFA_HCC104,0.345,disease,"Monoplegia, Other Paralytic Syndromes"
+CFD_HCC104,0.258,disease,"Monoplegia, Other Paralytic Syndromes"
+CPA_HCC104,0.300,disease,"Monoplegia, Other Paralytic Syndromes"
+CPD_HCC104,0.164,disease,"Monoplegia, Other Paralytic Syndromes"
+INS_HCC104,0.000,disease,"Monoplegia, Other Paralytic Syndromes"
+CNA_HCC106,1.488,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CND_HCC106,1.521,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CFA_HCC106,1.724,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CFD_HCC106,1.748,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CPA_HCC106,1.504,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CPD_HCC106,1.525,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+INS_HCC106,0.867,disease,Atherosclerosis of the Extremities with Ulceration or Gangrene
+CNA_HCC107,0.383,disease,Vascular Disease with Complications
+CND_HCC107,0.464,disease,Vascular Disease with Complications
+CFA_HCC107,0.565,disease,Vascular Disease with Complications
+CFD_HCC107,0.653,disease,Vascular Disease with Complications
+CPA_HCC107,0.463,disease,Vascular Disease with Complications
+CPD_HCC107,0.450,disease,Vascular Disease with Complications
+INS_HCC107,0.299,disease,Vascular Disease with Complications
+CNA_HCC108,0.288,disease,Vascular Disease
+CND_HCC108,0.301,disease,Vascular Disease
+CFA_HCC108,0.294,disease,Vascular Disease
+CFD_HCC108,0.267,disease,Vascular Disease
+CPA_HCC108,0.297,disease,Vascular Disease
+CPD_HCC108,0.314,disease,Vascular Disease
+INS_HCC108,0.093,disease,Vascular Disease
+CNA_HCC110,0.510,disease,Cystic Fibrosis
+CND_HCC110,2.676,disease,Cystic Fibrosis
+CFA_HCC110,0.509,disease,Cystic Fibrosis
+CFD_HCC110,3.516,disease,Cystic Fibrosis
+CPA_HCC110,0.392,disease,Cystic Fibrosis
+CPD_HCC110,3.051,disease,Cystic Fibrosis
+INS_HCC110,0.593,disease,Cystic Fibrosis
+CNA_HCC111,0.335,disease,Chronic Obstructive Pulmonary Disease
+CND_HCC111,0.246,disease,Chronic Obstructive Pulmonary Disease
+CFA_HCC111,0.430,disease,Chronic Obstructive Pulmonary Disease
+CFD_HCC111,0.331,disease,Chronic Obstructive Pulmonary Disease
+CPA_HCC111,0.358,disease,Chronic Obstructive Pulmonary Disease
+CPD_HCC111,0.267,disease,Chronic Obstructive Pulmonary Disease
+INS_HCC111,0.311,disease,Chronic Obstructive Pulmonary Disease
+CNA_HCC112,0.219,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CND_HCC112,0.237,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CFA_HCC112,0.161,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CFD_HCC112,0.275,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CPA_HCC112,0.200,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CPD_HCC112,0.229,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+INS_HCC112,0.110,disease,Fibrosis of Lung and Other Chronic Lung Disorders
+CNA_HCC114,0.517,disease,Aspiration and Specified Bacterial Pneumonias
+CND_HCC114,0.236,disease,Aspiration and Specified Bacterial Pneumonias
+CFA_HCC114,0.641,disease,Aspiration and Specified Bacterial Pneumonias
+CFD_HCC114,0.375,disease,Aspiration and Specified Bacterial Pneumonias
+CPA_HCC114,0.514,disease,Aspiration and Specified Bacterial Pneumonias
+CPD_HCC114,0.198,disease,Aspiration and Specified Bacterial Pneumonias
+INS_HCC114,0.156,disease,Aspiration and Specified Bacterial Pneumonias
+CNA_HCC115,0.130,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CND_HCC115,0.000,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CFA_HCC115,0.258,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CFD_HCC115,0.000,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CPA_HCC115,0.093,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CPD_HCC115,0.082,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+INS_HCC115,0.156,disease,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+CNA_HCC122,0.222,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CND_HCC122,0.231,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CFA_HCC122,0.271,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CFD_HCC122,0.269,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CPA_HCC122,0.182,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CPD_HCC122,0.201,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+INS_HCC122,0.394,disease,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+CNA_HCC124,0.521,disease,Exudative Macular Degeneration
+CND_HCC124,0.314,disease,Exudative Macular Degeneration
+CFA_HCC124,0.298,disease,Exudative Macular Degeneration
+CFD_HCC124,0.145,disease,Exudative Macular Degeneration
+CPA_HCC124,0.393,disease,Exudative Macular Degeneration
+CPD_HCC124,0.158,disease,Exudative Macular Degeneration
+INS_HCC124,0.217,disease,Exudative Macular Degeneration
+CNA_HCC134,0.435,disease,Dialysis Status
+CND_HCC134,0.406,disease,Dialysis Status
+CFA_HCC134,0.683,disease,Dialysis Status
+CFD_HCC134,0.594,disease,Dialysis Status
+CPA_HCC134,0.446,disease,Dialysis Status
+CPD_HCC134,0.480,disease,Dialysis Status
+INS_HCC134,0.468,disease,Dialysis Status
+CNA_HCC135,0.435,disease,Acute Renal Failure
+CND_HCC135,0.406,disease,Acute Renal Failure
+CFA_HCC135,0.683,disease,Acute Renal Failure
+CFD_HCC135,0.594,disease,Acute Renal Failure
+CPA_HCC135,0.446,disease,Acute Renal Failure
+CPD_HCC135,0.480,disease,Acute Renal Failure
+INS_HCC135,0.468,disease,Acute Renal Failure
+CNA_HCC136,0.289,disease,"Chronic Kidney Disease, Stage 5"
+CND_HCC136,0.231,disease,"Chronic Kidney Disease, Stage 5"
+CFA_HCC136,0.260,disease,"Chronic Kidney Disease, Stage 5"
+CFD_HCC136,0.323,disease,"Chronic Kidney Disease, Stage 5"
+CPA_HCC136,0.280,disease,"Chronic Kidney Disease, Stage 5"
+CPD_HCC136,0.261,disease,"Chronic Kidney Disease, Stage 5"
+INS_HCC136,0.245,disease,"Chronic Kidney Disease, Stage 5"
+CNA_HCC137,0.289,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CND_HCC137,0.105,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CFA_HCC137,0.260,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CFD_HCC137,0.138,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CPA_HCC137,0.280,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CPD_HCC137,0.039,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+INS_HCC137,0.201,disease,"Chronic Kidney Disease, Severe (Stage 4)"
+CNA_HCC138,0.069,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CND_HCC138,0.021,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CFA_HCC138,0.017,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CFD_HCC138,0.000,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CPA_HCC138,0.043,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CPD_HCC138,0.000,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+INS_HCC138,0.092,disease,"Chronic Kidney Disease, Moderate (Stage 3)"
+CNA_HCC157,2.028,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CND_HCC157,2.097,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CFA_HCC157,2.463,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CFD_HCC157,2.582,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CPA_HCC157,2.028,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CPD_HCC157,2.512,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+INS_HCC157,0.854,disease,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+CNA_HCC158,1.069,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CND_HCC158,1.212,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CFA_HCC158,1.471,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CFD_HCC158,1.380,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CPA_HCC158,1.162,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CPD_HCC158,0.925,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+INS_HCC158,0.322,disease,Pressure Ulcer of Skin with Full Thickness Skin Loss
+CNA_HCC159,0.656,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CND_HCC159,0.628,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CFA_HCC159,0.863,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CFD_HCC159,0.467,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CPA_HCC159,0.649,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CPD_HCC159,0.824,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+INS_HCC159,0.322,disease,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+CNA_HCC161,0.515,disease,"Chronic Ulcer of Skin, Except Pressure"
+CND_HCC161,0.592,disease,"Chronic Ulcer of Skin, Except Pressure"
+CFA_HCC161,0.727,disease,"Chronic Ulcer of Skin, Except Pressure"
+CFD_HCC161,0.583,disease,"Chronic Ulcer of Skin, Except Pressure"
+CPA_HCC161,0.541,disease,"Chronic Ulcer of Skin, Except Pressure"
+CPD_HCC161,0.542,disease,"Chronic Ulcer of Skin, Except Pressure"
+INS_HCC161,0.294,disease,"Chronic Ulcer of Skin, Except Pressure"
+CNA_HCC162,0.224,disease,Severe Skin Burn or Condition
+CND_HCC162,0.506,disease,Severe Skin Burn or Condition
+CFA_HCC162,0.162,disease,Severe Skin Burn or Condition
+CFD_HCC162,0.308,disease,Severe Skin Burn or Condition
+CPA_HCC162,0.000,disease,Severe Skin Burn or Condition
+CPD_HCC162,0.324,disease,Severe Skin Burn or Condition
+INS_HCC162,0.000,disease,Severe Skin Burn or Condition
+CNA_HCC166,0.486,disease,Severe Head Injury
+CND_HCC166,0.274,disease,Severe Head Injury
+CFA_HCC166,0.511,disease,Severe Head Injury
+CFD_HCC166,0.105,disease,Severe Head Injury
+CPA_HCC166,0.729,disease,Severe Head Injury
+CPD_HCC166,0.134,disease,Severe Head Injury
+INS_HCC166,0.000,disease,Severe Head Injury
+CNA_HCC167,0.077,disease,Major Head Injury
+CND_HCC167,0.000,disease,Major Head Injury
+CFA_HCC167,0.144,disease,Major Head Injury
+CFD_HCC167,0.025,disease,Major Head Injury
+CPA_HCC167,0.034,disease,Major Head Injury
+CPD_HCC167,0.019,disease,Major Head Injury
+INS_HCC167,0.000,disease,Major Head Injury
+CNA_HCC169,0.476,disease,Vertebral Fractures without Spinal Cord Injury
+CND_HCC169,0.369,disease,Vertebral Fractures without Spinal Cord Injury
+CFA_HCC169,0.532,disease,Vertebral Fractures without Spinal Cord Injury
+CFD_HCC169,0.377,disease,Vertebral Fractures without Spinal Cord Injury
+CPA_HCC169,0.512,disease,Vertebral Fractures without Spinal Cord Injury
+CPD_HCC169,0.336,disease,Vertebral Fractures without Spinal Cord Injury
+INS_HCC169,0.250,disease,Vertebral Fractures without Spinal Cord Injury
+CNA_HCC170,0.350,disease,Hip Fracture/Dislocation
+CND_HCC170,0.394,disease,Hip Fracture/Dislocation
+CFA_HCC170,0.409,disease,Hip Fracture/Dislocation
+CFD_HCC170,0.469,disease,Hip Fracture/Dislocation
+CPA_HCC170,0.354,disease,Hip Fracture/Dislocation
+CPD_HCC170,0.333,disease,Hip Fracture/Dislocation
+INS_HCC170,0.000,disease,Hip Fracture/Dislocation
+CNA_HCC173,0.208,disease,Traumatic Amputations and Complications
+CND_HCC173,0.172,disease,Traumatic Amputations and Complications
+CFA_HCC173,0.221,disease,Traumatic Amputations and Complications
+CFD_HCC173,0.525,disease,Traumatic Amputations and Complications
+CPA_HCC173,0.176,disease,Traumatic Amputations and Complications
+CPD_HCC173,0.180,disease,Traumatic Amputations and Complications
+INS_HCC173,0.092,disease,Traumatic Amputations and Complications
+CNA_HCC176,0.582,disease,Complications of Specified Implanted Device or Graft
+CND_HCC176,0.911,disease,Complications of Specified Implanted Device or Graft
+CFA_HCC176,0.680,disease,Complications of Specified Implanted Device or Graft
+CFD_HCC176,0.982,disease,Complications of Specified Implanted Device or Graft
+CPA_HCC176,0.520,disease,Complications of Specified Implanted Device or Graft
+CPD_HCC176,0.832,disease,Complications of Specified Implanted Device or Graft
+INS_HCC176,0.469,disease,Complications of Specified Implanted Device or Graft
+CNA_HCC186,0.832,disease,Major Organ Transplant or Replacement Status
+CND_HCC186,0.445,disease,Major Organ Transplant or Replacement Status
+CFA_HCC186,0.728,disease,Major Organ Transplant or Replacement Status
+CFD_HCC186,0.865,disease,Major Organ Transplant or Replacement Status
+CPA_HCC186,0.438,disease,Major Organ Transplant or Replacement Status
+CPD_HCC186,0.613,disease,Major Organ Transplant or Replacement Status
+INS_HCC186,1.046,disease,Major Organ Transplant or Replacement Status
+CNA_HCC188,0.534,disease,Artificial Openings for Feeding or Elimination
+CND_HCC188,0.755,disease,Artificial Openings for Feeding or Elimination
+CFA_HCC188,0.742,disease,Artificial Openings for Feeding or Elimination
+CFD_HCC188,0.770,disease,Artificial Openings for Feeding or Elimination
+CPA_HCC188,0.520,disease,Artificial Openings for Feeding or Elimination
+CPD_HCC188,0.732,disease,Artificial Openings for Feeding or Elimination
+INS_HCC188,0.514,disease,Artificial Openings for Feeding or Elimination
+CNA_HCC189,0.519,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CND_HCC189,0.437,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CFA_HCC189,0.795,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CFD_HCC189,0.934,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CPA_HCC189,0.697,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CPD_HCC189,0.626,disease,"Amputation Status, Lower Limb/Amputation Complications"
+INS_HCC189,0.357,disease,"Amputation Status, Lower Limb/Amputation Complications"
+CNA_F0_34,0.000,demographic,Female 0-34
+CND_F0_34,0.241,demographic,Female 0-34
+CFA_F0_34,0.000,demographic,Female 0-34
+CFD_F0_34,0.349,demographic,Female 0-34
+CPA_F0_34,0.000,demographic,Female 0-34
+CPD_F0_34,0.383,demographic,Female 0-34
+INS_F0_34,0.902,demographic,Female 0-34
+CNA_F35_44,0.000,demographic,Female 35-44
+CND_F35_44,0.315,demographic,Female 35-44
+CFA_F35_44,0.000,demographic,Female 35-44
+CFD_F35_44,0.349,demographic,Female 35-44
+CPA_F35_44,0.000,demographic,Female 35-44
+CPD_F35_44,0.414,demographic,Female 35-44
+INS_F35_44,1.105,demographic,Female 35-44
+CNA_F45_54,0.000,demographic,Female 45-54
+CND_F45_54,0.348,demographic,Female 45-54
+CFA_F45_54,0.000,demographic,Female 45-54
+CFD_F45_54,0.374,demographic,Female 45-54
+CPA_F45_54,0.000,demographic,Female 45-54
+CPD_F45_54,0.418,demographic,Female 45-54
+INS_F45_54,1.043,demographic,Female 45-54
+CNA_F55_59,0.000,demographic,Female 55-59
+CND_F55_59,0.379,demographic,Female 55-59
+CFA_F55_59,0.000,demographic,Female 55-59
+CFD_F55_59,0.434,demographic,Female 55-59
+CPA_F55_59,0.000,demographic,Female 55-59
+CPD_F55_59,0.414,demographic,Female 55-59
+INS_F55_59,1.065,demographic,Female 55-59
+CNA_F60_64,0.000,demographic,Female 60-64
+CND_F60_64,0.428,demographic,Female 60-64
+CFA_F60_64,0.000,demographic,Female 60-64
+CFD_F60_64,0.490,demographic,Female 60-64
+CPA_F60_64,0.000,demographic,Female 60-64
+CPD_F60_64,0.412,demographic,Female 60-64
+INS_F60_64,1.067,demographic,Female 60-64
+CNA_F65_69,0.323,demographic,Female 65-69
+CND_F65_69,0.000,demographic,Female 65-69
+CFA_F65_69,0.441,demographic,Female 65-69
+CFD_F65_69,0.000,demographic,Female 65-69
+CPA_F65_69,0.359,demographic,Female 65-69
+CPD_F65_69,0.000,demographic,Female 65-69
+INS_F65_69,1.245,demographic,Female 65-69
+CNA_F70_74,0.386,demographic,Female 70-74
+CND_F70_74,0.000,demographic,Female 70-74
+CFA_F70_74,0.519,demographic,Female 70-74
+CFD_F70_74,0.000,demographic,Female 70-74
+CPA_F70_74,0.406,demographic,Female 70-74
+CPD_F70_74,0.000,demographic,Female 70-74
+INS_F70_74,1.150,demographic,Female 70-74
+CNA_F75_79,0.451,demographic,Female 75-79
+CND_F75_79,0.000,demographic,Female 75-79
+CFA_F75_79,0.593,demographic,Female 75-79
+CFD_F75_79,0.000,demographic,Female 75-79
+CPA_F75_79,0.476,demographic,Female 75-79
+CPD_F75_79,0.000,demographic,Female 75-79
+INS_F75_79,1.014,demographic,Female 75-79
+CNA_F80_84,0.528,demographic,Female 80-84
+CND_F80_84,0.000,demographic,Female 80-84
+CFA_F80_84,0.716,demographic,Female 80-84
+CFD_F80_84,0.000,demographic,Female 80-84
+CPA_F80_84,0.550,demographic,Female 80-84
+CPD_F80_84,0.000,demographic,Female 80-84
+INS_F80_84,0.882,demographic,Female 80-84
+CNA_F85_89,0.641,demographic,Female 85-89
+CND_F85_89,0.000,demographic,Female 85-89
+CFA_F85_89,0.865,demographic,Female 85-89
+CFD_F85_89,0.000,demographic,Female 85-89
+CPA_F85_89,0.653,demographic,Female 85-89
+CPD_F85_89,0.000,demographic,Female 85-89
+INS_F85_89,0.798,demographic,Female 85-89
+CNA_F90_94,0.783,demographic,Female 90-94
+CND_F90_94,0.000,demographic,Female 90-94
+CFA_F90_94,0.987,demographic,Female 90-94
+CFD_F90_94,0.000,demographic,Female 90-94
+CPA_F90_94,0.783,demographic,Female 90-94
+CPD_F90_94,0.000,demographic,Female 90-94
+INS_F90_94,0.668,demographic,Female 90-94
+CNA_F95_GT,0.787,demographic,Female 95-GT
+CND_F95_GT,0.000,demographic,Female 95-GT
+CFA_F95_GT,1.041,demographic,Female 95-GT
+CFD_F95_GT,0.000,demographic,Female 95-GT
+CPA_F95_GT,0.873,demographic,Female 95-GT
+CPD_F95_GT,0.000,demographic,Female 95-GT
+INS_F95_GT,0.501,demographic,Female 95-GT
+CNA_M0_34,0.000,demographic,Male 0-34
+CND_M0_34,0.156,demographic,Male 0-34
+CFA_M0_34,0.000,demographic,Male 0-34
+CFD_M0_34,0.240,demographic,Male 0-34
+CPA_M0_34,0.000,demographic,Male 0-34
+CPD_M0_34,0.389,demographic,Male 0-34
+INS_M0_34,1.101,demographic,Male 0-34
+CNA_M35_44,0.000,demographic,Male 35-44
+CND_M35_44,0.199,demographic,Male 35-44
+CFA_M35_44,0.000,demographic,Male 35-44
+CFD_M35_44,0.235,demographic,Male 35-44
+CPA_M35_44,0.000,demographic,Male 35-44
+CPD_M35_44,0.282,demographic,Male 35-44
+INS_M35_44,1.002,demographic,Male 35-44
+CNA_M45_54,0.000,demographic,Male 45-54
+CND_M45_54,0.241,demographic,Male 45-54
+CFA_M45_54,0.000,demographic,Male 45-54
+CFD_M45_54,0.307,demographic,Male 45-54
+CPA_M45_54,0.000,demographic,Male 45-54
+CPD_M45_54,0.313,demographic,Male 45-54
+INS_M45_54,0.965,demographic,Male 45-54
+CNA_M55_59,0.000,demographic,Male 55-59
+CND_M55_59,0.287,demographic,Male 55-59
+CFA_M55_59,0.000,demographic,Male 55-59
+CFD_M55_59,0.402,demographic,Male 55-59
+CPA_M55_59,0.000,demographic,Male 55-59
+CPD_M55_59,0.340,demographic,Male 55-59
+INS_M55_59,1.017,demographic,Male 55-59
+CNA_M60_64,0.000,demographic,Male 60-64
+CND_M60_64,0.330,demographic,Male 60-64
+CFA_M60_64,0.000,demographic,Male 60-64
+CFD_M60_64,0.526,demographic,Male 60-64
+CPA_M60_64,0.000,demographic,Male 60-64
+CPD_M60_64,0.373,demographic,Male 60-64
+INS_M60_64,1.061,demographic,Male 60-64
+CNA_M65_69,0.308,demographic,Male 65-69
+CND_M65_69,0.000,demographic,Male 65-69
+CFA_M65_69,0.494,demographic,Male 65-69
+CFD_M65_69,0.000,demographic,Male 65-69
+CPA_M65_69,0.370,demographic,Male 65-69
+CPD_M65_69,0.000,demographic,Male 65-69
+INS_M65_69,1.288,demographic,Male 65-69
+CNA_M70_74,0.394,demographic,Male 70-74
+CND_M70_74,0.000,demographic,Male 70-74
+CFA_M70_74,0.600,demographic,Male 70-74
+CFD_M70_74,0.000,demographic,Male 70-74
+CPA_M70_74,0.427,demographic,Male 70-74
+CPD_M70_74,0.000,demographic,Male 70-74
+INS_M70_74,1.329,demographic,Male 70-74
+CNA_M75_79,0.473,demographic,Male 75-79
+CND_M75_79,0.000,demographic,Male 75-79
+CFA_M75_79,0.710,demographic,Male 75-79
+CFD_M75_79,0.000,demographic,Male 75-79
+CPA_M75_79,0.500,demographic,Male 75-79
+CPD_M75_79,0.000,demographic,Male 75-79
+INS_M75_79,1.317,demographic,Male 75-79
+CNA_M80_84,0.556,demographic,Male 80-84
+CND_M80_84,0.000,demographic,Male 80-84
+CFA_M80_84,0.803,demographic,Male 80-84
+CFD_M80_84,0.000,demographic,Male 80-84
+CPA_M80_84,0.544,demographic,Male 80-84
+CPD_M80_84,0.000,demographic,Male 80-84
+INS_M80_84,1.207,demographic,Male 80-84
+CNA_M85_89,0.686,demographic,Male 85-89
+CND_M85_89,0.000,demographic,Male 85-89
+CFA_M85_89,1.000,demographic,Male 85-89
+CFD_M85_89,0.000,demographic,Male 85-89
+CPA_M85_89,0.659,demographic,Male 85-89
+CPD_M85_89,0.000,demographic,Male 85-89
+INS_M85_89,1.122,demographic,Male 85-89
+CNA_M90_94,0.841,demographic,Male 90-94
+CND_M90_94,0.000,demographic,Male 90-94
+CFA_M90_94,1.142,demographic,Male 90-94
+CFD_M90_94,0.000,demographic,Male 90-94
+CPA_M90_94,0.834,demographic,Male 90-94
+CPD_M90_94,0.000,demographic,Male 90-94
+INS_M90_94,0.989,demographic,Male 90-94
+CNA_M95_GT,0.986,demographic,Male 95-GT
+CND_M95_GT,0.000,demographic,Male 95-GT
+CFA_M95_GT,1.267,demographic,Male 95-GT
+CFD_M95_GT,0.000,demographic,Male 95-GT
+CPA_M95_GT,1.047,demographic,Male 95-GT
+CPD_M95_GT,0.000,demographic,Male 95-GT
+INS_M95_GT,0.821,demographic,Male 95-GT
+CNA_ORIGDIS_FEMALE,0.250,orig_disabled,Originally Disabled Female
+CND_ORIGDIS_FEMALE,0.000,orig_disabled,Originally Disabled Female
+CFA_ORIGDIS_FEMALE,0.173,orig_disabled,Originally Disabled Female
+CFD_ORIGDIS_FEMALE,0.000,orig_disabled,Originally Disabled Female
+CPA_ORIGDIS_FEMALE,0.136,orig_disabled,Originally Disabled Female
+CPD_ORIGDIS_FEMALE,0.000,orig_disabled,Originally Disabled Female
+INS_ORIGDIS_FEMALE,0.000,orig_disabled,Originally Disabled Female
+CNA_ORIGDIS_MALE,0.147,orig_disabled,Originally Disabled Male
+CND_ORIGDIS_MALE,0.000,orig_disabled,Originally Disabled Male
+CFA_ORIGDIS_MALE,0.182,orig_disabled,Originally Disabled Male
+CFD_ORIGDIS_MALE,0.000,orig_disabled,Originally Disabled Male
+CPA_ORIGDIS_MALE,0.083,orig_disabled,Originally Disabled Male
+CPD_ORIGDIS_MALE,0.000,orig_disabled,Originally Disabled Male
+INS_ORIGDIS_MALE,0.000,orig_disabled,Originally Disabled Male

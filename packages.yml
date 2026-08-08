@@ -1,0 +1,12 @@
+packages:
+  - package: elementary-data/elementary
+    version: 0.23.1
+    ## Docs: https://docs.elementary-data.com
+
+  - package: godatadriven/dbt_date
+    version: 0.18.0
+    ## Fusion-compatible fork (replaces calogica/dbt_date)
+
+  - package: metaplane/dbt_expectations
+    version: 0.10.10
+    ## Fusion-compatible fork — column-set validation for BI-consumed models

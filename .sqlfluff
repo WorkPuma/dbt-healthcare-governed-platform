@@ -1,0 +1,4 @@
+[sqlfluff]
+dialect = databricks
+max_line_length = 120
+exclude_rules = layout.spacing, layout.indent, layout.operators, aliasing.table, structure.column_order, structure.simple_case, structure.join_condition_order, references.qualification, capitalisation.keywords

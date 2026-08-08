@@ -1,0 +1,97 @@
+version: 2
+
+models:
+  - name: dim_raf__attribution
+    description: >
+      Canonical member attribution dimension with monthly status, demographics,
+      eligibility, and provider assignment. Replaces PATIENT_STATUS_MONTHLY +
+      payer classification.
+
+      MDM scope gate (2026-06): the scoring population is now DEFINED by the MDM
+      Member master-data reference (mart_mdm__member_populations.enrolled_ma) and
+      inner-joined onto attribution — RAF no longer maintains its own MA filter.
+      enrolled_ma is the full Medicare-Advantage panel and reconciles ~1:1 with the
+      prior payor_category='Medicare Advantage' gate, so scored counts hold steady
+      while the definition lives in MDM. The MDM atomic predicates ride along as
+      first-class columns so the panel can be segmented (Paid vs Operational vs
+      at-risk vs MDM-universe vs unattributed MA) without re-deriving population
+      logic, and the stable EMPI member identity is carried for cross-walking.
+
+      Inception floor: inherits the raf_data_inception_month floor (2024-10-01)
+      from the int_patient_status_pit_monthly spine, so member-months begin at
+      the first month of reliable EMR data.
+    columns:
+      - name: entity_id
+        description: >
+          Stable EMPI member key for the row — the Athena patient_id (as string)
+          for matched members, or the identity_id for roster-only ghost members
+          (no Athena record). Grain anchor.
+        tests: [not_null]
+      - name: patient_id
+        description: Athena patient id; NULL for roster-only ghost members.
+      - name: year_month
+        description: Calendar year-month of the monthly RAF snapshot.
+        tests: [not_null]
+      - name: eligibility_segment
+        description: CMS eligibility segment (CNA, NE, CND, etc.) for coefficient lookup.
+        tests: [not_null]
+      - name: member_identity_key
+        description: Stable EMPI member identity (identity_id, else ATH-<patient_id>) from MDM int_mdm__member_xref.
+        tests: [not_null]
+      - name: identity_id
+        description: EMPI stable identity key (H####); null when the patient is not yet EMPI-clustered.
+      - name: at_risk_payor
+        description: MDM predicate — member-month is under an executed HH risk contract (PAYOR_A H5959 / PAYOR_B H2001).
+        tests: [not_null]
+      - name: on_mmr
+        description: MDM predicate — member appears on an MMR/revenue run for this coverage month (Paid population).
+        tests: [not_null]
+      - name: on_payor_roster
+        description: MDM predicate — member is on a carry-forward payor attribution roster (Operational/Prospective population).
+        tests: [not_null]
+      - name: attributed_hh
+        description: MDM predicate — HH is the assigned group per roster attribution this month.
+        tests: [not_null]
+      - name: has_ma_primary
+        description: MDM predicate — Medicare Advantage is the primary insurance in Athena this month.
+        tests: [not_null]
+      - name: in_clinical_panel
+        description: MDM population — clinically_active AND at_risk_payor AND NOT voluntarily_inactive.
+        tests: [not_null]
+      - name: in_mdm_universe
+        description: MDM population — enrolled_ma AND (at_risk_payor OR on_mmr OR on_payor_roster).
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - entity_id
+              - year_month
+              - eligibility_segment
+
+  - name: dim_raf__hcc_catalog
+    description: >
+      Consolidated CMS-HCC V28 reference dimension. One row per HCC code
+      combining labels, CNA disease coefficients, diagnostic categories,
+      hierarchy rules, ICD-10 mapping counts, and interaction eligibility.
+      Used by RAF pipeline snapshot/rollback and VendorNav assessment dashboards.
+    columns:
+      - name: hcc_number
+        description: Numeric CMS HCC category number.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: hcc_code
+        description: CMS Hierarchical Condition Category (HCC) code.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: hcc_label
+        description: Human-readable CMS HCC category label.
+        tests: [not_null]
+      - name: cna_coefficient
+        description: Community Non-Dual Aged (CNA) disease coefficient for this HCC.
+        tests: [not_null]
+

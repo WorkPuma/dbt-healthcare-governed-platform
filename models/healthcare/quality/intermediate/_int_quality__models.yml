@@ -1,0 +1,1035 @@
+version: 2
+
+# Schema — DEV-4296 evidence funnel · intermediate branches + spine
+# Branches normalize each source to the common funnel shape; the spine unions + dedupes them.
+
+models:
+  # ---------- per-branch intermediates ----------
+  - name: int_quality__encounter_code_evidence
+    description: "Encounter diagnosis codes — SNOMED (native) + ICD-10 (dxicd10->icdcodeall lookup), joined to encounter for patient/date."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, joined from clinicalencounter."
+        data_tests: [not_null]
+      - name: code
+        description: "SNOMED code (native inline) or ICD-10 code (dotless, via dxicd10->icdcodeall lookup); dotless format matches ref_payor_alpha_accepted_codes to avoid silent join misses."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'SNOMED' (native inline diagnosis) or 'ICD10CM' (via the dxicd10 lookup chain)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['SNOMED', 'ICD10CM']
+      - name: date_of_service
+        description: "Encounter date (clinicalencounter.encounter_date)."
+        data_tests: [not_null]
+
+  - name: int_quality__service_code_evidence
+    description: "Encounter service procedure codes with exact-type classifier (CPT/CPT_II/CPT_III/HCPCS/LOCAL_MISC); raw+modifier preserved."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, joined from clinicalencounter."
+        data_tests: [not_null]
+      - name: code
+        description: "Base procedure code (procedure_code_base), modifier stripped — see code_raw for the full code."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Exact-type classifier derived from the code shape (regex on procedure_code_base): CPT_II (####F), CPT_III (####T), CPT (5-digit), HCPCS (letter+4-digit), LOCAL_MISC (raw code prefixed MISC), else UNKNOWN_PROC."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['CPT', 'CPT_II', 'CPT_III', 'HCPCS', 'LOCAL_MISC', 'UNKNOWN_PROC']
+      - name: date_of_service
+        description: "Encounter date (clinicalencounter.encounter_date)."
+        data_tests: [not_null]
+
+  - name: int_quality__lab_code_evidence
+    description: "LOINC lab codes (clinicalresultobservation -> clinicalresult -> document). v1 = code only (result value preserved in staging)."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, joined via clinicalresult -> document."
+        data_tests: [not_null]
+      - name: code
+        description: "LOINC lab code (leg A, from clinicalresultobservation) or CPT order code recovered when no LOINC observation exists (leg B, from clinicalordertypecpt)."
+        data_tests: [not_null]
+      - name: code_type
+        description: >
+          'LOINC' from clinicalresultobservation (leg A) or 'CPT' from
+          clinicalordertypecpt when no LOINC observation exists (leg B).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['LOINC', 'CPT']
+      - name: date_of_service
+        description: "Lab observation date (clinicalresult.observation_datetime)."
+        data_tests: [not_null]
+
+  - name: int_quality__surgical_code_evidence
+    description: "Historical surgical history codes (patient-direct): SNOMED + CPT."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier (patientsurgicalhistory.patient_id, patient-direct)."
+        data_tests: [not_null]
+      - name: code
+        description: "SNOMED code or CPT procedure code from patientsurgicalhistory."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'SNOMED' (primary) or 'CPT'."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['SNOMED', 'CPT']
+      - name: date_of_service
+        description: "Surgery date (patientsurgicalhistory.surgery_date)."
+        data_tests: [not_null]
+
+  - name: int_quality__problem_code_evidence
+    description: >
+      SPECIALIZED EXCLUSION FUNNEL (DEV-4300) — payer-agnostic, code-filtered problem-list branch.
+      Captures HEDIS *exclusion* value-set codes (mastectomy / hysterectomy / colectomy / colorectal
+      ca / absence-of-organ) off athenahealth.athenaone.patientproblem and feeds int_quality__code_pool
+      at 'soft' provenance. Not the full pool (filtered to exclusions), not a payer sidecar (every payer
+      applies the same HEDIS exclusion value-sets). Recovers patients whose permanent exclusion is
+      recorded ONLY on the problem list and never billed.
+      Patient resolved via AP-016 chart-hop (CHARTID->chart.ENTERPRISEID->patient.PATIENTID, ~99.95%),
+      as patientproblem.PATIENTID is 0% populated. Deletes dropped in staging (entered-in-error);
+      deactivated/ended KEPT (permanent event). No measure logic, no audit table — the sidecar applies
+      priority-0 / ship-at-any-service-date to soft-provenance exclusion evidence.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4300, exclusion]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, resolved via AP-016 chart-hop (patientproblem.chart_id -> chart.enterprise_id -> patient.patient_id), since patientproblem.PATIENTID is 0% populated."
+        data_tests: [not_null]
+      - name: code
+        description: "SNOMED or ICD-10 (dotless) code from the problem list, filtered to HEDIS exclusion value-sets (ref_hedis_exclusion_codes)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'SNOMED' or 'ICD10CM'."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['SNOMED', 'ICD10CM']
+      - name: date_of_service
+        description: "coalesce(patientproblem.onset_date, patientproblem.created_at)."
+        data_tests: [not_null]
+      - name: source_method
+        description: "'problem_list' for every row in this branch."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['problem_list']
+      - name: evidence_provenance
+        description: "'soft' for every row — problem-list evidence is deferred/lowest-tier provenance."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['soft']
+
+  # ---------- the spine (two outputs) ----------
+  - name: int_quality__code_pool
+    description: >
+      Unified payor-agnostic ALL-CODES supplemental pool — one row per patient × code ×
+      code_type × date_of_service. UNION ALL of the per-branch intermediates, deduped.
+      Incremental merge table (P10/M9). Best-evidence ranking / exclusions / payer code-list
+      are downstream sidecars, not here. This is not HEDIS evidence — it grabs every clinical code.
+      The QM-native sidecar owns the int_quality__hedis_evidence name. Exclusion-funnel rows (source_method='problem_list')
+      are permanent and exempt from the DOS window filter.
+    config:
+      meta: {owner: gyasi}
+      tags: [quality, evidence_funnel, dev-4296, spine]
+      contract: {enforced: true}
+    columns:
+      - name: evidence_key
+        description: "Surrogate PK — md5(patient_id||code||code_type||date_of_service) = the grain."
+        data_type: string
+        data_tests: [not_null, unique]
+      - name: patient_id
+        description: "Stable patient identifier — the grain's patient dimension."
+        data_type: string
+        data_tests: [not_null]
+      - name: code
+        description: "The clinical code (base form, modifier stripped) — the grain's code dimension."
+        data_type: string
+        data_tests: [not_null]
+      - name: code_type
+        description: "Code system tag carried through from the contributing branch (ICD10CM, SNOMED, CPT, CPT_II, CPT_III, HCPCS, LOINC, LOCAL_MISC, UNKNOWN_PROC)."
+        data_type: string
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['ICD10CM', 'SNOMED', 'CPT', 'CPT_II', 'CPT_III', 'HCPCS', 'LOINC', 'LOCAL_MISC', 'UNKNOWN_PROC']
+      - name: date_of_service
+        description: "Date the code was recorded/observed — the grain's date dimension."
+        data_type: date
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Full code incl. modifier (preserved for reuse)."
+        data_type: string
+      - name: code_modifier
+        description: "Modifier split off code_raw when present (e.g. 'QW'); NULL when the branch carries no modifier."
+        data_type: string
+      - name: source_tables
+        description: "Distinct source branches that contributed this (patient, code, type, date)."
+        data_type: array<string>
+      - name: source_hits
+        description: "Count of contributing source rows deduped into this grain."
+        data_type: bigint
+      - name: measurement_year
+        description: "Derived year(date_of_service). Consumers apply the year filter (e.g. 2026)."
+        data_type: int
+      - name: code_origin
+        description: "Provenance tier — 'system' (native EMR / QM engine) or 'org_added' (NLP/chart-review derived). 'org_added' wins if ANY contributing row is org_added."
+        data_type: string
+      - name: source_methods
+        description: "Distinct source_method values that contributed this grain row (array). e.g. ['encounter_dx','service_proc']."
+        data_type: array<string>
+      - name: order_status
+        description: "Grain-collapsed submission status: 'submittable' if any contributing source is closed, resulted, or already submittable (billed/hard-tier evidence is never demoted); else 'pending'. This is the gate the payer submission models filter on (order_status = 'submittable')."
+        data_type: string
+      - name: evidence_provenance
+        description: "Best evidence-provenance tier for this grain (billed > closed_encounter > resulted > surgical > soft). 'billed' = on a CLAIM (administrative credit); 'closed_encounter' = performed-maybe-unbilled; 'resulted' = lab came back; 'surgical' = surgical history; 'soft' = problem-list (deferred). Highest tier wins across contributing rows."
+        data_type: string
+      - name: create_date
+        description: "Row creation date carried from the earliest/representative contributing source record."
+        data_type: date
+
+  - name: int_quality__hedis_evidence
+    description: >
+      TRUE HEDIS evidence — athena QM-engine native, one row per patient × measure ×
+      service_date (best result per measure, deduped, deterministic).
+      "Patient X satisfied measure Y on date Z, result R." This is what athena's QM engine
+      already computed — the baseline. The code_pool is the supplemental net to find MORE
+      patients than this. Open gaps (NULL satisfied_date, 'Needs Data') are KEPT intentionally.
+      result is NULL for pure screening measures by design (~88.5% of rows). Incremental merge
+      on last_updated + 7d lookback. Validated: 381,228 rows · 15,553 patients · 133 measures.
+    config:
+      meta: {owner: gyasi}
+      tags: [quality, hedis, intermediate, dev-4296]
+      contract: {enforced: true}
+    columns:
+      - name: evidence_key
+        description: "Surrogate PK — md5(patient_id||measure||coalesce(service_date,'OPEN')) = the grain."
+        data_type: string
+        data_tests: [not_null, unique]
+      - name: patient_id
+        description: "Stable patient identifier; resolved via CHART chart-hop when QMRESULT.PATIENTID is depopulated."
+        data_type: string
+        data_tests: [not_null]
+      - name: measure
+        description: "Athena QM measure code (P4PMEASURE.SHORTNAME). e.g. 'BCS', 'CBP', 'CDC-HbA1c'."
+        data_type: string
+        data_tests: [not_null]
+      - name: quality_category
+        description: "Measure category from P4PMEASURE; falls back to P4PPROGRAM when unmapped."
+        data_type: string
+      - name: result_status
+        description: "Athena QM result status — e.g. 'SATISFIED', 'NEEDS DATA', 'OUT OF RANGE', 'EXCLUDED'."
+        data_type: string
+      - name: service_date
+        description: "Date the measure was satisfied (QMRESULT.SATISFIEDDATE); NULL for open/needs-data rows."
+        data_type: date
+      - name: result
+        description: >
+          Measure-type-specific numeric result value — lab value (CLINICALRESULTOBSERVATIONVALUE),
+          BP systolic, or questionnaire SCORE. NULL for pure screenings (legitimately ~88.5% of rows).
+        data_type: string
+      - name: result_secondary
+        description: "BP diastolic reading when result holds systolic; NULL otherwise."
+        data_type: string
+      - name: result_units
+        description: "Units for numeric result (OBSERVATIONUNITS). NULL for non-lab/non-vital measures."
+        data_type: string
+      - name: provider_id
+        description: "Provider associated with the QM result (QMRESULT.PROVIDERID)."
+        data_type: string
+      - name: exclusion_reason
+        description: "Exclusion reason text when result_status is EXCLUDED."
+        data_type: string
+      - name: program
+        description: "Quality program identifier (QMRESULT.P4PPROGRAM). e.g. 'HEDIS'."
+        data_type: string
+      - name: p4p_result_id
+        description: "Source P4PRESULTID — lineage key, NOT part of the grain."
+        data_type: string
+      - name: measurement_year
+        description: "Derived year(service_date). NULL when service_date is NULL (open rows). Consumer applies year filter."
+        data_type: int
+      - name: last_updated
+        description: "QMRESULT.LASTUPDATED — drives the incremental merge matched_condition."
+        data_type: timestamp
+        data_tests: [not_null]
+      - name: code_origin
+        description: "Provenance tier — 'system' for all QM-engine native rows; 'org_added' reserved for NLP/chart-review derived additions (future)."
+        data_type: string
+      - name: source_method
+        description: "Extraction method — 'qm_engine' for all rows in this model (athena QM native result)."
+        data_type: string
+
+  - name: int_quality__gap_mirror
+    description: >
+      QA surface — patients the QM engine has identified for a measure but that have no confirmed
+      coded closure. Surfaces open gaps and possible closures as a worklist for HH-added NLP /
+      chart-review code addition. NEVER a filter; consuming this model does not modify satisfaction
+      status. gap_kind: 'excluded' (exclusion_reason set), 'possible_closure' (Needs Data / Out of
+      Range — a newly discovered code might close), 'open' (no signal). Payor-agnostic; downstream
+      payer sidecars layer on roster. gap_source = 'qm_open_gap' for all v1 rows.
+      TODO v2: cross-reference int_quality__code_pool for denominator-without-result cases where
+      HH already holds a measure-relevant code the QM engine has not yet processed.
+    config:
+      meta: {owner: gyasi}
+      tags: [quality, gap-mirror, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier."
+        data_tests: [not_null]
+      - name: measure
+        description: "Athena QM measure code (P4PMEASURE.SHORTNAME)."
+        data_tests: [not_null]
+      - name: quality_category
+        description: "Measure category from P4PMEASURE; falls back to P4PPROGRAM."
+      - name: gap_status
+        description: "Raw result_status from hedis_evidence (e.g. 'Needs Data', 'Out of Range')."
+      - name: gap_kind
+        description: "Derived classification — 'excluded', 'possible_closure', or 'open'."
+      - name: gap_source
+        description: "Origin of this gap row — 'qm_open_gap' for all v1 rows."
+      - name: last_signal_date
+        description: "service_date from hedis_evidence — most recent date associated with this open result."
+      - name: result
+        description: "Partial result value (e.g. partial lab reading) when present; NULL for pure screenings."
+      - name: provider_id
+        description: "Provider associated with the QM result."
+      - name: program
+        description: "Quality program identifier (e.g. 'HEDIS')."
+      - name: exclusion_reason
+        description: "Exclusion reason text when gap_kind = 'excluded'."
+
+  - name: int_quality__payer_submission
+    description: >
+      GENERIC seed-driven submission candidates — ONE model, ALL payers. Joins the shared
+      identification (int_quality__hedis_evidence) to the payer registry (ref_payer_measure_spec)
+      -> patient x measure x payer, annotated with QA flags. FULLNESS not filter: nothing dropped
+      on payer business rules here. Add a payer by adding seed rows — no new SQL. Measure-grained;
+      in_payer_roster is wired here (annotation to the payer-keyed roster union); code-level submittable
+      rows + accepted-code annotation remain downstream extension points.
+    config:
+      meta: {owner: gyasi}
+      tags: [quality, payer, submission, intermediate, dev-4296]
+    columns:
+      - name: submission_key
+        description: "Surrogate key — md5(patient_id||payer||internal_measure||coalesce(service_date,'OPEN'))."
+        data_tests: [not_null, unique]
+      - name: patient_id
+        description: "Stable patient identifier, carried from int_quality__hedis_evidence."
+        data_tests: [not_null]
+      - name: payer
+        description: "Payer from ref_payer_measure_spec (e.g. 'PAYOR_A-MN', 'PAYOR_C')."
+        data_tests: [not_null]
+      - name: internal_measure
+        description: "HH internal measure code (BCS, COL, CBP, EED, KED, GSD)."
+        data_tests: [not_null]
+      - name: payer_measure_label
+        description: "The payer's own label for the measure (PAYOR_A 'BCSScr' vs PAYOR_C 'BCS-E')."
+      - name: eligibility_mode
+        description: "'pre_filter' (drop non-members downstream) or 'wide_net' (keep all; payer filters)."
+      - name: closure_state
+        description: "'excluded' | 'closed_coded' | 'possible_closure' | 'open' — QA annotation, never a filter."
+      - name: is_coded_closure
+        description: "TRUE when the QM engine confirms a coded closure (result_status SATISFIED)."
+      - name: code_origin
+        description: "Provenance carried from the evidence — 'system' vs 'org_added'."
+      - name: in_payer_roster
+        description: "TRUE when the patient is on the payer's engagement-gated roster (LEFT JOIN to the payer-keyed union of fct_quality__{payor_alpha_mn,PAYOR_C}_roster on normalized patient_id + payer). Annotation only (fullness); the real roster filter is the contract_output <-> roster inner join downstream."
+      - name: code_on_payer_list
+        description: "Null at this measure grain by design: code_on_payer_list is a CODE-LEVEL fact, assembled per-payer in fct_quality__<payer>_contract_output (PAYOR_A via ref_payor_alpha_accepted_codes, PAYOR_C via the glossary) — annotate, never filter."
+
+  # ---------- additional per-branch intermediates (charge/claim/document/questionnaire/surgery) ----------
+  - name: int_quality__charge_code_evidence
+    description: >
+      THE VISIT-CHARGE branch of the funnel — billing procedure codes from the charge ledger
+      (visitcharge -> clinicalencounter for patient_id/date). evidence_provenance = 'closed_encounter'
+      (tier 2): charge-level administrative evidence, softer than a finalized claim but harder than
+      a pending order. Parses a comma-appended modifier off procedurecode (e.g. QW point-of-care).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, resolved via visitcharge.VISITID -> clinicalencounter."
+        data_tests: [not_null]
+      - name: code
+        description: "Base procedure code (comma-appended modifier split off) — see code_raw for the original string."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Exact-type classifier by code shape: CPT_II (####F), CPT_III (####T), CPT (5-digit), HCPCS (letter+4-digit), else UNKNOWN_PROC. Without the modifier split, CLIA-waived (QW) and other modifier-suffixed codes fail this classifier and land in UNKNOWN_PROC, invisible to payer sidecars."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['CPT', 'CPT_II', 'CPT_III', 'HCPCS', 'UNKNOWN_PROC']
+      - name: date_of_service
+        description: "Cascade: FROMDATEDATETIME -> encounter_date -> CHARGEDATEDATETIME -> CREATEDDATETIME -> LASTMODIFIEDDATETIME (funnel invariant: every row is dated)."
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Original visitcharge.PROCEDURECODE string, including any comma-appended modifier."
+      - name: code_modifier
+        description: "Modifier split off the raw procedure code (e.g. 'QW'); NULL when none present."
+      - name: source_table
+        description: "'VISIT_CHARGE' for every row in this branch."
+      - name: measurement_year
+        description: "Derived year(date_of_service)."
+      - name: code_origin
+        description: "'system' for every row in this branch."
+      - name: source_method
+        description: "'visit_charge' for every row in this branch."
+      - name: order_status
+        description: "'closed' for every row in this branch."
+      - name: evidence_provenance
+        description: "'closed_encounter' (tier 2) for every row in this branch."
+      - name: create_date
+        description: "visitcharge.CREATEDDATETIME."
+
+  - name: int_quality__claim_code_evidence
+    description: >
+      THE BILLED branch of the funnel — administrative-credit evidence (the hardest provenance tier).
+      Reads billed ICD-10 directly off claimdiagnosis joined to its parent claim (CLOSED/BILLED status
+      only). Carries claim_billed_date + bill_lag_days for the not-yet-billed worklist; code_pool
+      treats 'billed' as an UPGRADE over closed-encounter evidence, never a gate (avoids dropping the
+      trailing ~30d of every monthly pull — the false-month lag).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier (claim.patientid)."
+        data_tests: [not_null]
+      - name: code
+        description: "Billed ICD-10 diagnosis code (dotless — claimdiagnosis.DIAGNOSISCODE with '.' stripped)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'ICD10CM' for every row in this branch."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['ICD10CM']
+      - name: date_of_service
+        description: "claim.claimservicedate."
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Same dotless code as `code` (no separate raw form for claim diagnoses)."
+      - name: code_modifier
+        description: "Always NULL — claim diagnosis codes carry no modifier."
+      - name: source_table
+        description: "'CLAIM_DX' for every row in this branch."
+      - name: source_record_id
+        description: "claimdiagnosis.CLAIMDIAGNOSISID — lineage key."
+      - name: measurement_year
+        description: "Derived year(date_of_service)."
+      - name: code_origin
+        description: "'system' for every row in this branch."
+      - name: source_method
+        description: "'claim_dx' for every row in this branch."
+      - name: order_status
+        description: "'submittable' for every row in this branch."
+      - name: evidence_provenance
+        description: "'billed' (tier 1, hardest) for every row in this branch."
+      - name: claim_billed_date
+        description: "claim.LASTBILLEDDATE1 — when the claim actually posted (extra column, not carried into code_pool)."
+      - name: bill_lag_days
+        description: "datediff(claim_billed_date, date_of_service) — the billing lag (extra column, not carried into code_pool)."
+      - name: create_date
+        description: "claim.CLAIMCREATEDDATETIME."
+
+  - name: int_quality__document_evidence
+    description: >
+      THE REFERRAL-OUT / DOCUMENT branch — captures externally-performed results (mammogram at an
+      imaging center, external colonoscopy/CT colonography, external pap, external labs) that return
+      to athena only as signed-off documents, never as an HH charge/encounter/claim. CPT resolved via
+      the document's own clinicalordertypeid, or via the linked clinicalresult row's clinicalordertypeid
+      when the document itself carries none. evidence_provenance = 'resulted'.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier (document.PATIENTID)."
+        data_tests: [not_null]
+      - name: code
+        description: "CPT/HCPCS procedure code resolved via clinicalordertypecpt (via the document itself or its linked clinicalresult)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Exact-type classifier by code shape: CPT_II, CPT_III, CPT (5-digit), HCPCS (letter+4-digit), else UNKNOWN_PROC."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['CPT', 'CPT_II', 'CPT_III', 'HCPCS', 'UNKNOWN_PROC']
+      - name: date_of_service
+        description: "coalesce(document.observationdatetime, document.createddatetime)."
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Same procedure code as `code` (no separate raw/modifier form for document evidence)."
+      - name: code_modifier
+        description: "Always NULL — document evidence carries no modifier."
+      - name: source_table
+        description: "'DOCUMENT_RESULT' for every row in this branch."
+      - name: measurement_year
+        description: "Derived year(date_of_service)."
+      - name: code_origin
+        description: "'system' for every row in this branch."
+      - name: source_method
+        description: "lower(document.documentclass) — e.g. 'imagingresult', 'labresult', 'clinicaldocument'."
+      - name: order_status
+        description: "'closed' for every row in this branch (document status = CLOSED, provider signed off)."
+      - name: evidence_provenance
+        description: "'resulted' — a signed-off referral-out result."
+      - name: create_date
+        description: "document.CREATEDDATETIME."
+
+  - name: int_quality__questionnaire_evidence
+    description: >
+      THE DOCUMENT / FORM-CAPTURE branch — PAYOR_A screening measures whose evidence is a scored clinical
+      form, not a billed/ordered code: PHQ9 (depression), GAD7 (anxiety), AlcoholScr (AUDIT-C/AUDIT).
+      Source: chartquestionnaire, patient resolved via CLINICALENCOUNTERID -> clinicalencounter. Each
+      form template maps to its PAYOR_A-accepted LOINC code so the existing accepted-code assignment
+      picks it up with zero new mapping.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, resolved via clinicalencounter."
+        data_tests: [not_null]
+      - name: code
+        description: "LOINC code mapped from the questionnaire template name (44261-6 PHQ9 / 70274-6 GAD7 / 75626-2 AUDIT-C / 75624-7 AUDIT)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'LOINC' for every row in this branch."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['LOINC']
+      - name: date_of_service
+        description: "coalesce(chartquestionnaire.scoreddatetime, encounter_date)."
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Original questionnairetemplatename (e.g. 'PHQ-9', 'AUDIT-C') — the pre-mapping source value."
+      - name: code_modifier
+        description: "Always NULL — questionnaire evidence carries no modifier."
+      - name: source_table
+        description: "'CHART_QUESTIONNAIRE' for every row in this branch."
+      - name: measurement_year
+        description: "Derived year(date_of_service)."
+      - name: code_origin
+        description: "'system' for every row in this branch."
+      - name: source_method
+        description: "'questionnaire' for every row in this branch."
+      - name: order_status
+        description: "'resulted' for every row in this branch."
+      - name: evidence_provenance
+        description: "'resulted' for every row in this branch."
+      - name: create_date
+        description: "chartquestionnaire.CREATEDDATETIME."
+      - name: result_value
+        description: "Numeric score (chartquestionnaire.SCORE) — the value-required field for PAYOR_A submission RESULT."
+
+  - name: int_quality__surgery_code_evidence
+    description: >
+      Direct patientsurgery SNOMED codes, patient-direct (distinct from int_quality__surgical_code_evidence,
+      which reads patientsurgicalhistory). Active rows only (deleteddatetime + deactivateddatetime both NULL).
+      evidence_provenance = 'surgical'.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier (patientsurgery.PATIENTID)."
+        data_tests: [not_null]
+      - name: code
+        description: "SNOMED code (patientsurgery.SNOMEDCODE)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'SNOMED' for every row in this branch."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['SNOMED']
+      - name: date_of_service
+        description: "coalesce(patientsurgery.surgerydatetime, patientsurgery.createddatetime)."
+        data_tests: [not_null]
+      - name: code_raw
+        description: "Same SNOMED code as `code` (no separate raw form)."
+      - name: code_modifier
+        description: "Always NULL — surgery evidence carries no modifier."
+      - name: source_table
+        description: "'PATIENT_SURGERY' for every row in this branch."
+      - name: source_record_id
+        description: "patientsurgery.PATIENTSURGERYID — lineage key."
+      - name: measurement_year
+        description: "Derived year(date_of_service)."
+      - name: code_origin
+        description: "'system' for every row in this branch."
+      - name: source_method
+        description: "'patient_surgery' for every row in this branch."
+      - name: order_status
+        description: "'closed' for every row in this branch."
+      - name: evidence_provenance
+        description: "'surgical' for every row in this branch."
+      - name: create_date
+        description: "patientsurgery.CREATEDDATETIME."
+
+  # ---------- registries / lookups feeding the HEDIS layer ----------
+  - name: int_quality__diabetes_cohort
+    description: >
+      EXPLICIT diabetes registry — a federation-safe (Delta replica, claimdiagnosis/claim only), QM-
+      INDEPENDENT denominator for the diabetes condition-gated quality measures (EED, KED, GSD).
+      Identification: >=1 diabetes ICD-10 dx (E08/E09/E10/E11/E13, dotless — E12 is not a valid
+      ICD-10 code) on a CLOSED/BILLED claim within a 24-month lookback of the measurement year. v1
+      caveat: this is a >=1-claim cohort, not the full NCQA GSD identification (which also needs
+      2-visit logic / dispensed diabetes meds).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier with >=1 qualifying diabetes claim diagnosis."
+        data_tests: [not_null, unique]
+      - name: has_diabetes
+        description: "Always TRUE for rows in this cohort (the model only emits identified diabetics)."
+        data_tests: [not_null]
+
+  - name: int_quality__eed_review
+    description: >
+      EED review worklist: the athena QM engine says EED = SATISFIED (including external eye
+      providers) but the patient has no submittable eye-exam code in athena. Per Q27/Q28 these are
+      MANUAL REVIEW candidates with a suggested code (92250, fundus photography) — never auto-submitted.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, eed, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier with QM EED=SATISFIED but no submittable eye-exam code."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "'RetEye' for every row in this model."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['RetEye']
+      - name: satisfied_date
+        description: "Most recent QM-satisfied date for the patient's EED/retinal/eye-exam measure."
+      - name: suggested_code
+        description: "'92250' (fundus photography) for every row — the suggested code for manual review."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['92250']
+      - name: suggested_code_type
+        description: "'CPT' for every row in this model."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['CPT']
+      - name: review_reason
+        description: "Fixed explanatory text: QM satisfied EED with no submittable eye-exam code in athena — manual review per Q27/Q28."
+
+  # ---------- the measure-assignment / HEDIS-dated layer ----------
+  - name: int_quality__measure_dated_evidence
+    description: >
+      THE HEDIS layer — payer-agnostic. Assigns each code_pool row its HEDIS measure_type (via the
+      accepted-code value-set join) and stamps the HEDIS lookback -> expiration_date (per-code_list,
+      else per-measure). Additive over int_quality__code_pool: no payer roster, send_strategy, or
+      accepted-code subset lives here — that's the payer sidecar's job. Also unions in the
+      TobaccoUseStatus derivation (result-only, no code), vitals evidence, and the QM COLScr fallback.
+      result_value re-attaches the QM/lab/questionnaire numeric result for value-required measures.
+      TobaccoUseStatus is derived from dotless athena ICDs via prefix match: F17.*/Z72.0/Z71.6 ->
+      current use, Z87.891 -> former; per-patient pick is current-before-former, then most-recent.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "HEDIS/HH internal measure type this code/result was assigned to (e.g. 'BCS', 'COLScr', 'HbA1c', 'TobaccoUseStatus')."
+        data_tests: [not_null]
+      - name: code
+        description: "Assigned code (from code_pool), or NULL for the result-only TobaccoUseStatus rows."
+      - name: code_type
+        description: "Code system of the assigned code, or NULL for the result-only TobaccoUseStatus rows."
+      - name: date_of_service
+        description: "Date of the underlying evidence (carried from code_pool / vitals / qm_col_fallback)."
+        data_tests: [not_null]
+      - name: code_origin
+        description: "'system' or 'org_added', carried from the underlying evidence."
+      - name: order_status
+        description: "Lifecycle status carried from the underlying evidence branch."
+      - name: evidence_provenance
+        description: "Evidence-provenance tier carried from the underlying evidence branch."
+      - name: col_method
+        description: "Colonoscopy/COL screening modality (from ref_hedis_codelist_lookback or the QM COLScr fallback); NULL for non-COL measures."
+      - name: lookback_months
+        description: "HEDIS lookback window in months (per code_list, else per measure); NULL when unsourced."
+      - name: create_date
+        description: "Row creation date carried from the underlying evidence."
+      - name: expiration_date
+        description: "date_of_service + lookback_months when lookback_months is known; NULL otherwise."
+      - name: result_value
+        description: "Numeric/text result re-attached from the QM engine, lab, or questionnaire branch for value-required measures (HbA1c/eGFR/uACR/PHQ9/GAD7/vitals); NULL when not applicable."
+
+  - name: int_quality__measure_evidence_signals
+    description: >
+      THE EVIDENCE FLAG layer, DETAIL — a tall audit trail, one row per (patient x payer x measure x
+      evidence_source), carrying the 0/1 flag(s) for its source plus the evidence riding with the flag
+      (code/code_type/DOS for codes; value/secondary/DOS for results). Feeders: the QM/value side
+      (int_quality__payer_submission) and the code side (int_quality__payor_alpha_code_evidence, v1 scope).
+      Identify, not gate — nothing is filtered on payer business rules here.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier."
+        data_tests: [not_null]
+      - name: payer
+        description: "Payer key (e.g. 'PAYOR_A-MN')."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "Payer measure label (payer_submission.payer_measure_label for the QM arm; payor_alpha_code_evidence.measure_type for the code arm)."
+        data_tests: [not_null]
+      - name: evidence_source
+        description: "Which feeder produced this row — 'athena_qm' (QM engine / result-value) or 'code' (submittable accepted code)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['athena_qm', 'code']
+      - name: athena_quality
+        description: "1 if this row came from the athena QM engine feeder, else 0."
+      - name: athena_quality_satisfied
+        description: "1 if the QM engine result_status is SATISFIED, else 0 (always 0 on the code-arm rows)."
+      - name: athena_quality_type
+        description: "Raw athena QM measure name (qm_measure) on QM-arm rows; NULL on code-arm rows."
+      - name: has_code
+        description: "1 if this row carries a submittable accepted code, else 0."
+      - name: code
+        description: "Submittable code (code-arm rows only; NULL on QM-arm rows)."
+      - name: code_type
+        description: "Code system of `code` (code-arm rows only; NULL on QM-arm rows)."
+      - name: code_date_of_service
+        description: "Date of service for the code (code-arm rows only; NULL on QM-arm rows)."
+      - name: has_value
+        description: "1 if a QM result value is present, else 0 (always 0 on code-arm rows)."
+      - name: value
+        description: "QM result value (QM-arm rows only; NULL on code-arm rows)."
+      - name: value_secondary
+        description: "QM secondary result value, e.g. BP diastolic when value holds systolic (QM-arm rows only)."
+      - name: value_date_of_service
+        description: "Date of service for the QM result value (QM-arm rows only; NULL on code-arm rows)."
+      - name: tagged_nlp
+        description: "1 when the contributing evidence's code_origin is 'org_added' (NLP/chart-review derived), else 0."
+      - name: result_status
+        description: "Raw QM result_status (QM-arm rows only; NULL on code-arm rows)."
+      - name: exclusion_reason
+        description: "QM exclusion reason text when result_status is EXCLUDED (QM-arm rows only)."
+      - name: measurement_year
+        description: "Derived measurement year carried from the feeding branch."
+
+  - name: int_quality__measure_evidence_summary
+    description: >
+      THE EVIDENCE FLAG layer, SUMMARY — one row per (patient x payer x measure) over the eligible
+      denominator (roster x active payer measures x eligibility rule, reconciled against the
+      collapsed evidence_signals). A contract-eligible patient with no evidence stays in as OPEN_GAP.
+      Derives a closure_tier (strongest wins: EXCLUDED > CODED_NATIVE > CODED_NLP > QM_MET_NO_CODE >
+      VALUE_ONLY > POSSIBLE_CLOSURE > OPEN_GAP). v1 scope: PAYOR_A-MN roster, 6 active measures.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier from the PAYOR_A-MN roster (v1 scope). Normalized via cast through decimal(38,0) before string-cast, since the prod membership source types patient_id as DOUBLE and a direct string-cast yields a trailing '.0' that won't match the QM/demographics integer ids."
+        data_tests: [not_null]
+      - name: payer
+        description: "Payer key from ref_payer_measure_spec (e.g. 'PAYOR_A-MN')."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "Active payer measure label."
+        data_tests: [not_null]
+      - name: eligibility_scope
+        description: "Eligibility rule bound to this measure — 'all_members', 'age_sex', or 'condition'."
+      - name: condition_required
+        description: "Condition gate for eligibility_scope='condition' (e.g. 'diabetes'); NULL otherwise."
+      - name: age_as_of_dec31
+        description: "Patient age as of Dec-31 of the measurement year (measurement_year - year(date_of_birth))."
+      - name: athena_quality
+        description: "1 if the athena QM engine has any signal for this patient x measure, else 0 (0 = no evidence, part of the open-gap definition)."
+      - name: athena_quality_satisfied
+        description: "1 if the athena QM engine result_status is SATISFIED, else 0."
+      - name: has_code
+        description: "1 if a submittable accepted code exists for this patient x measure, else 0."
+      - name: has_value
+        description: "1 if a QM result value exists for this patient x measure, else 0."
+      - name: tagged_nlp
+        description: "1 if the contributing evidence's code_origin is 'org_added' (NLP/chart-review derived), else 0."
+      - name: is_excluded
+        description: "1 if any contributing signal carries an exclusion_reason, else 0."
+      - name: code
+        description: "Representative submittable code for this patient x measure when has_code=1; NULL otherwise."
+      - name: code_type
+        description: "Code system of the representative code."
+      - name: code_date_of_service
+        description: "Date of service for the representative code."
+      - name: value
+        description: "Representative QM result value when has_value=1; NULL otherwise."
+      - name: value_date_of_service
+        description: "Date of service for the representative QM result value."
+      - name: exclusion_reason
+        description: "Representative exclusion reason text when is_excluded=1."
+      - name: closure_tier
+        description: "Derived closure classification — strongest signal wins across EXCLUDED / CODED_NATIVE / CODED_NLP / QM_MET_NO_CODE / VALUE_ONLY / POSSIBLE_CLOSURE / OPEN_GAP."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['EXCLUDED', 'CODED_NATIVE', 'CODED_NLP', 'QM_MET_NO_CODE', 'VALUE_ONLY', 'POSSIBLE_CLOSURE', 'OPEN_GAP']
+      - name: gap_reason
+        description: "Human-readable explanation of the closure_tier classification."
+      - name: measurement_year
+        description: "The fixed measurement year this summary was built for (var('measurement_year'))."
+
+  # ---------- QM-engine detail layer + support lookups ----------
+  - name: int_quality__provider_npi
+    description: >
+      Base provider_id -> NPI lookup for the PAYOR_A contract_output NPI assembly. Reuses the canonical
+      raf/shared stg_athena__provider staging model. The perf-vs-attributed coalesce and confidence
+      score live at the downstream F-stage join site, which joins this model twice.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: provider_id
+        description: "Athena provider identifier (stg_athena__provider.provider_id)."
+        data_tests: [not_null, unique]
+      - name: performing_npi
+        description: "Provider's NPI number (stg_athena__provider.npi); only rows with a non-null NPI are included."
+        data_tests: [not_null]
+
+  - name: int_quality__qm_col_fallback
+    description: >
+      QM-engine COLScr fallback — when athena's quality engine marks COL=SATISFIED but the patient has
+      no coded colorectal evidence in code_pool (external/referred screen never coded in HH's athena),
+      emits a COLScr row with the modality-correct assumed code (derived from the QM-validated OBGYN
+      "Date of Last Colonoscopy" field, via int_quality__qm_joined). Fires only when no coded COLScr
+      evidence exists (anti-join) — QM is the fallback, never overriding a real coded screen.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier with QM COL=SATISFIED and no coded colorectal evidence."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "'COLScr' for every row in this model."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COLScr']
+      - name: code
+        description: "Modality-derived assumed code (SNOMED colonoscopy/sigmoidoscopy/CT-colonography, CPT sDNA-FIT, or HCPCS FOBT/FIT), defaulting to colonoscopy when modality is unstated."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Code system of the assumed code — 'SNOMED' (default/colonoscopy/sigmoidoscopy/CT-colonography), 'CPT' (sDNA-FIT), or 'HCPCS' (FOBT/FIT)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['SNOMED', 'CPT', 'HCPCS']
+      - name: date_of_service
+        description: "The QM 'satisfied-this-month' date (satisfied_date) — a monthly-delta date, not the real screening date."
+        data_tests: [not_null]
+      - name: code_origin
+        description: "'system' for every row in this model."
+      - name: order_status
+        description: "'submittable' for every row in this model."
+      - name: evidence_provenance
+        description: "'soft' for every row in this model — a QM-inferred fallback, not a directly coded screen."
+      - name: col_method
+        description: "Derived screening modality — COLONOSCOPY / SIGMOIDOSCOPY / CT_COLONOGRAPHY / SDNA_FIT / FOBT_FIT."
+      - name: lookback_months
+        description: "120 (the colonoscopy HEDIS lookback) for every row in this model."
+      - name: create_date
+        description: "Same as date_of_service (satisfied_date)."
+      - name: expiration_date
+        description: "date_of_service + 120 months."
+      - name: result_value
+        description: "Modality-specific RESULT code (1-5) per the ref_payor_alpha_assumed_codes mapping."
+      - name: real_screening_date
+        description: "The actual screening date parsed from the QM-joined OBGYN answer field (ANSWER0), carried for traceability — NOT used as the file date_of_service."
+
+  - name: int_quality__qm_joined
+    description: >
+      THE FULLY-JOINED QM DATA LAYER — athena's quality engine output (qmresult) joined to its attached
+      detail-data table (p4presultdata) on P4PRESULTID, with key/value detail pivoted to first-class
+      columns plus a detail_map catch-all. One reusable place for every QM-driven measure to read
+      satisfaction plus the real underlying evidence (modality, date, document link), instead of
+      re-deriving qmresult piecemeal. Grain: one row per (patient_id, p4pmeasure, p4presultid),
+      roster-scoped (PAYOR_A-MN roster, v1).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier (qmresult.PATIENTID), scoped to the PAYOR_A-MN roster."
+        data_tests: [not_null]
+      - name: measure_name
+        description: "Athena QM measure name (qmresult.P4PMEASURE)."
+        data_tests: [not_null]
+      - name: result_status
+        description: "Athena QM result status (qmresult.RESULTSTATUS)."
+      - name: satisfied_date
+        description: "qmresult.SATISFIEDDATE."
+      - name: p4presultid
+        description: "Source P4PRESULTID — joins to the pivoted p4presultdata detail; lineage key."
+        data_tests: [not_null]
+      - name: qmr_result_column
+        description: "p4presultdata QMRRESULTCOLUMN value — the question:answer string the QM engine recorded."
+      - name: question0
+        description: "p4presultdata QUESTION0 value, e.g. 'Date of Last Colonoscopy'."
+      - name: answer0
+        description: "p4presultdata ANSWER0 value — the real answer to question0 (e.g. an actual screening date string)."
+      - name: satisfying_group
+        description: "p4presultdata SATISFYINGGROUP value."
+      - name: satisfying_numerator
+        description: "p4presultdata SATISFYINGNUMERATOR value — which numerator path satisfied the measure."
+      - name: clinical_encounter_id
+        description: "p4presultdata CLINICALENCOUNTERID value, when the QM evidence is tied to an encounter."
+      - name: clinical_order_type_id
+        description: "p4presultdata CLINICALORDERTYPEID value, when the QM evidence is tied to an order type."
+      - name: result_id
+        description: "p4presultdata RESULTID value — link to the underlying clinical result."
+      - name: document_status
+        description: "p4presultdata DOCUMENTSTATUS value."
+      - name: document_subclass
+        description: "p4presultdata DOCUMENTSUBCLASS value, e.g. 'CLINICALDOCUMENT_OPERATIVENOTE'."
+      - name: order_timestamp
+        description: "p4presultdata ORDERTIMESTAMP value."
+      - name: result_type
+        description: "p4presultdata TYPE value."
+      - name: lab_value
+        description: "p4presultdata CLINICALRESULTOBSERVATIONVALUE value — the lab result, when present."
+      - name: observation_id
+        description: "p4presultdata CLINICALRESULTOBSERVATIONID value."
+      - name: result_units
+        description: "p4presultdata OBSERVATIONUNITS value."
+      - name: score_value
+        description: "p4presultdata SCORE value, for questionnaire-driven measures."
+      - name: bp_systolic
+        description: "p4presultdata VITAL.SYSTOLIC / VITALS.BLOODPRESSURE.SYSTOLIC value."
+      - name: bp_diastolic
+        description: "p4presultdata VITAL.DIASTOLIC / VITALS.BLOODPRESSURE.DIASTOLIC value."
+      - name: result_date_raw
+        description: "p4presultdata RESULTDATE value (raw string, not cast to date)."
+      - name: num_labs
+        description: "p4presultdata NUMLABS value."
+      - name: detail_map
+        description: "Full key/value map of every p4presultdata entry for this p4presultid — the catch-all so nothing is dropped."
+
+  - name: int_quality__vitals_evidence
+    description: >
+      THE VITALS-CAPTURE branch — value-required clinical measurements from athena's vitalsign table
+      (BP systolic/diastolic, pulse, weight, temperature, respiratory rate), each emitting its standard
+      LOINC code plus the numeric reading as result_value. Only BP maps to a PAYOR_A submission measure
+      today (CBP); the others are captured as evidence but not submitted. Out-of-clinical-bounds
+      readings are dropped as data-entry junk (a junk reading is not a signal).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Stable patient identifier, resolved via clinicalencounter."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "Vital sign type — BLOOD_PRESSURE_SYSTOLIC / BLOOD_PRESSURE_DIASTOLIC / Pulse / Weight / Temperature / RespiratoryRate."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['BLOOD_PRESSURE_SYSTOLIC', 'BLOOD_PRESSURE_DIASTOLIC', 'Pulse', 'Weight', 'Temperature', 'RespiratoryRate']
+      - name: code
+        description: "LOINC code for the vital type (8480-6 systolic / 8462-4 diastolic / 8867-4 pulse / 29463-7 weight / 8310-5 temperature / 9279-1 respiratory rate)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "'LOINC' for every row in this model."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['LOINC']
+      - name: date_of_service
+        description: "coalesce(vitalsign.createddatetime, encounter_date)."
+        data_tests: [not_null]
+      - name: code_origin
+        description: "'system' for every row in this model."
+      - name: order_status
+        description: "'submittable' for every row in this model."
+      - name: evidence_provenance
+        description: "'resulted' for every row in this model."
+      - name: col_method
+        description: "Always NULL — not applicable to vitals evidence."
+      - name: lookback_months
+        description: "Always NULL — vitals have no lookback (current-year measurement only)."
+      - name: create_date
+        description: "Same as date_of_service."
+      - name: expiration_date
+        description: "Always NULL — vitals have no expiration/lookback."
+      - name: result_value
+        description: "Plausibility-bounded numeric reading, cast to string (1 decimal for Temperature, integer otherwise); NULL readings outside clinical bounds are dropped upstream."
+        data_tests: [not_null]
+
+  - name: int_quality__code_titles
+    description: >
+      THE CANONICAL CODE -> TITLE LAYER — every code flowing through the funnel gets a proper title, so
+      measure matching can anchor on (code + title) instead of brittle category equality. Keyed on the
+      distinct codes actually present in int_quality__code_pool. Title sources by authority: ICD via
+      athenahealth.athenaone.icdcodeall, CPT/HCPCS via the licensed procedure-code reference, SNOMED/
+      LOINC via athena_ref() (native replica or Snowflake federation fallback), and HEDIS value-set
+      names (ref_payor_alpha_accepted_codes.code_list) as the fallback for any code system.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, dev-4296]
+    columns:
+      - name: code
+        description: "The clinical code, from the distinct (code, code_type) pairs in int_quality__code_pool."
+        data_tests: [not_null]
+      - name: code_system
+        description: "Code system of `code` (ICD10CM/SNOMED/CPT/CPT_II/CPT_III/HCPCS/LOINC/etc.), carried from code_pool.code_type."
+        data_tests: [not_null]
+      - name: value_set_titles
+        description: "Array of distinct HEDIS value-set names (ref_payor_alpha_accepted_codes.code_list) this code participates in; NULL when the code is in no value set."
+      - name: clinical_title
+        description: "Authoritative ICD clinical descriptor (icdcodeall.diagnosiscodedescription); populated for ICD10CM codes only."
+      - name: cpt_title
+        description: "CPT/CPT_II/CPT_III/HCPCS description from athena's licensed procedure-code reference (procedurecodereference), excluding deleted codes."
+      - name: snomed_title
+        description: "SNOMED description resolved via athena_ref() (native replica or Snowflake federation fallback)."
+      - name: loinc_title
+        description: "LOINC long common name resolved via athena_ref() (native replica or Snowflake federation fallback)."
+      - name: canonical_title
+        description: "coalesce(clinical_title, cpt_title, snomed_title, loinc_title, first value_set_titles entry) — the best available title, first-authority-wins."
+      - name: normalized_title
+        description: "canonical_title with a trailing bracketed qualifier (e.g. '[Reported]', '[Presence]') stripped, lower-cased and trimmed — the canonical form for fuzzy reconciliation."
+      - name: title_source
+        description: "Coverage flag indicating which source populated canonical_title — athena_icd / athena_cpt / athena_snomed / athena_loinc / value_set / untitled (the residual gap)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['athena_icd', 'athena_cpt', 'athena_snomed', 'athena_loinc', 'value_set', 'untitled']

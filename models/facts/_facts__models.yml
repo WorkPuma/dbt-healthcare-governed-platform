@@ -1,0 +1,3029 @@
+version: 2
+
+models:
+  - name: appointments
+    description: >
+      Canonical appointment fact. Consolidates scheduling data from
+      vw_operating_review_appointments enriched with conformed dimension keys
+      for patient identity, provider, location, and appointment type. Includes
+      initial visit derivation, NPV recovery logic, and slot status
+      classification. Grain: One row per appointment_id.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+        servingdb_sync: true
+        servingdb_mode: TRIGGERED
+        # Source refreshes once per day after the Athenahealth share push
+        # completes (~02:00-04:00 UTC). 4h global SLO is wrong for this cadence
+        # and was generating ~hourly false-positive ErrorTracking alerts. Read by
+        # prefect-jobs/cache_saga.py and surfaced to the BIPlatform freshness watchdog
+        # via cube_dependency_map.json.
+        freshness_slo_hours: 30
+        freshness_hard_fail_hours: 48
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      # Upstream schema drift blocks deploy — protects operating review dashboard cards
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: appointment_date
+          config:
+            severity: warn
+            tags: ["elementary", "volume", "cube_contract"]
+      # MERGE-never-deletes drift: appointment_ids in target that no longer exist in
+      # vw_operating_review_appointments. 2,465 phantoms cleaned 2026-04-28; cascades
+      # from athena.appointment hard-deletes (appointmentdeleteddatetime set after merge).
+      - no_filter_drift:
+          arguments:
+            key_column: appointment_id
+            source_model: vw_operating_review_appointments
+          config:
+            severity: warn
+            tags: ["elementary", "filter_drift", "data_quality"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: appointment_id
+        data_type: decimal(10,0)
+        description: "Athena Appointment ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: patient_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+        data_type: decimal(10,0)
+        description: "{{ doc('patient_id') }}"
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: provider_id
+        data_type: decimal(10,0)
+        description: "Athena Provider ID"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('providers')
+                field: provider_id
+              config:
+                severity: warn
+                where: "provider_id IS NOT NULL AND provider_id NOT IN
+                  (22,23,24,25,30,41,43,77)"
+                description:
+                  "Excludes lab/imaging/system scheduling entities that are valid in
+                  Athena but filtered from the providers dimension by MDM
+                  (Non_Provider)."
+                tags: ["referential_integrity", "provider_linkage"]
+      - name: department_id
+        data_type: decimal(10,0)
+        description: "Athena Department ID"
+      - name: appointment_type_id
+        data_type: decimal(10,0)
+        description: "Athena Appointment Type ID"
+      - name: clinic_name
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: visit_category
+        data_type: string
+        description: "Derived visit category from appointment_types dimension"
+      - name: is_initial_visit
+        data_type: boolean
+        description: "{{ doc('initial_visit') }}"
+      - name: is_npv
+        data_type: boolean
+        description: "True if this is a New Patient Visit (Initial Visit type)"
+      - name: is_awv
+        data_type: boolean
+        description: "{{ doc('awv_visit') }}"
+      - name: is_completed
+        data_type: boolean
+        description: "{{ doc('appointment_completed') }}"
+      - name: is_cancelled
+        data_type: boolean
+        description: "{{ doc('appointment_cancelled') }}"
+      - name: is_no_show
+        data_type: boolean
+        description:
+          "True if appointment was cancelled on or after the appointment date
+          (cancel_date >= appt_date). Subset of is_cancelled. Mutually exclusive
+          with is_rescheduled and is_truly_cancelled."
+      - name: is_rescheduled
+        data_type: boolean
+        description:
+          "True if appointment was cancelled before the appointment date AND
+          the patient scheduled another visit within 30 days. Subset of
+          is_cancelled. Mutually exclusive with is_no_show and
+          is_truly_cancelled."
+      - name: is_truly_cancelled
+        data_type: boolean
+        description:
+          "True if appointment was cancelled before the appointment date AND
+          the patient did NOT schedule another visit within 30 days. Subset of
+          is_cancelled. Mutually exclusive with is_no_show and is_rescheduled."
+      - name: cancellation_category
+        data_type: string
+        description:
+          "Universal cancellation classification: 'No Show' (cancelled
+          on/after appt date), 'Rescheduled' (cancelled before appt date, new
+          visit within 30 days), 'Truly Cancelled' (cancelled before appt date,
+          no new visit within 30 days), or NULL (not cancelled)."
+      - name: appointment_date
+        data_type: date
+        description:
+          "Calendar date of the appointment from Athena APPOINTMENTDATE.
+          Primary time dimension for appointment trending and scheduling
+          analysis."
+      - name: npv_recovery_category
+        data_type: string
+        description:
+          "NPV recovery classification: Immediate Reschedule, Late Recovery,
+          Truly Lost"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID from EMPI identity bridge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: provider_clinic
+        data_type: string
+        description: "Provider's assigned clinic name"
+      - name: is_patient_facing
+        data_type: boolean
+        description: "True if clinic is a patient-facing location"
+      - name: clinic_type
+        data_type: string
+        description: "Clinic classification from clinics dimension"
+      - name: service_location
+        data_type: string
+        description: "Service location / patient-facing clinic name"
+      - name: provider_name
+        data_type: string
+        description: "{{ doc('provider_name') }}"
+      - name: is_physician
+        data_type: boolean
+        description: "True if provider is a physician (MD/DO)"
+      - name: is_mid_level
+        data_type: boolean
+        description: "True if provider is a mid-level (NP/PA)"
+      - name: is_bh_provider
+        data_type: boolean
+        description: "True if provider is a behavioral health provider (MDM-curated flag)"
+      - name: appointment_type_name
+        data_type: string
+        description: "Full appointment type name from Athena"
+      - name: appointment_type_short_name
+        data_type: string
+        description: "Abbreviated appointment type name"
+      - name: appointment_type_duration
+        data_type: int
+        description: "Default duration in minutes for the appointment type"
+      - name: is_telehealth
+        data_type: boolean
+        description: "True if appointment is a telehealth visit"
+      - name: is_behavioral_health
+        data_type: boolean
+        description: "Behavioral health visit flag from MDM appointment type classification"
+      - name: is_open_slot
+        data_type: boolean
+        description: "True if slot status is Open"
+      - name: is_filled_slot
+        data_type: boolean
+        description: "True if slot status is Filled/Booked"
+      - name: is_checked_in
+        data_type: boolean
+        description: "True if patient has checked in"
+      - name: is_future_appointment
+        data_type: boolean
+        description: "True if appointment date is in the future"
+      - name: appointment_week
+        data_type: timestamp
+        description: "Truncated to week start for weekly trending"
+      - name: appointment_month
+        data_type: timestamp
+        description: "Truncated to month start for monthly trending"
+      - name: appointment_year
+        data_type: int
+        description: "Year extracted from appointment_date"
+      - name: appointment_start_time
+        data_type: string
+        description: "Scheduled start time of the appointment"
+      - name: appointment_duration_minutes
+        data_type: decimal(10,0)
+        description: "Actual duration of the appointment in minutes"
+      - name: scheduled_datetime
+        data_type: timestamp
+        description: "Date/time the appointment was originally scheduled"
+      - name: scheduled_by
+        data_type: string
+        description: "User who scheduled the appointment"
+      - name: cancelled_datetime
+        data_type: timestamp
+        description: "Date/time the appointment was cancelled"
+      - name: cancellation_week
+        data_type: timestamp
+        description: "Cancellation date truncated to week start"
+      - name: cancellation_month
+        data_type: timestamp
+        description: "Cancellation date truncated to month start"
+      - name: cancellation_reason
+        data_type: string
+        description: "Reason for appointment cancellation"
+      - name: cancelled_by
+        data_type: string
+        description: "User who cancelled the appointment"
+      - name: rescheduled_to_appointment_id
+        data_type: decimal(10,0)
+        description: "Appointment ID this was rescheduled to"
+      - name: reschedule_datetime
+        data_type: timestamp
+        description: "Date/time the appointment was rescheduled"
+      - name: rescheduled_by
+        data_type: string
+        description: "User who rescheduled the appointment"
+      - name: check_in_datetime
+        data_type: timestamp
+        description: "Date/time the patient checked in"
+      - name: check_out_datetime
+        data_type: timestamp
+        description: "Date/time the patient checked out"
+      - name: primary_insurance_name
+        data_type: string
+        description: "Primary insurance package name (waterfall: claim billed →
+          eligibility → appointment)"
+      - name: primary_payor
+        data_type: string
+        description:
+          "MDM payor_brand for the patient's current primary insurance (e.g.
+          PAYOR_A, UCare, PAYOR_B, Medicare FFS). From patients dimension
+          canonical_primary_payor_brand."
+      - name: primary_insurance_category
+        data_type: string
+        description:
+          "Primary insurance category classification (waterfall-resolved
+          irc_group)"
+      - name: primary_insurance_product_type
+        data_type: string
+        description:
+          "Primary insurance product type (e.g. Medicare HMO, Medicare PPO,
+          PPO, HMO)"
+      - name: primary_insurance_source
+        data_type: string
+        description:
+          "Source of primary insurance information (Claim, Eligibility,
+          Appointment, None)"
+      - name: secondary_insurance_name
+        data_type: string
+        description: "Secondary insurance package name"
+      - name: secondary_insurance_category
+        data_type: string
+        description: "Secondary insurance category classification"
+      - name: membership_status
+        data_type: string
+        description:
+          "Salesforce Membership_Enrollment__c from the patients dimension.
+          Values: Active Member, Active Member - Waived, Eligible, Sent
+          Contract, Contract Signed, Scheduled, Declined, Inactive Member, Not
+          Eligible, NULL."
+      - name: member_category
+        data_type: string
+        description: "Membership category: Established (first scheduled before
+          2025-11-03) or Net New Member. NULL for non-membership patients."
+      - name: legacy_membership_eligible
+        data_type: boolean
+        description:
+          "True if patient is grandfathered into the legacy (pre-launch)
+          membership tier."
+      - name: is_rescheduled_immediate
+        data_type: boolean
+        description: "True if appointment was immediately rescheduled after cancellation"
+      - name: is_late_recovery
+        data_type: boolean
+        description:
+          "True if appointment was recovered after initial cancellation (not
+          immediate)"
+      - name: slot_status
+        data_type: string
+        description: "Derived slot status: Open, Filled, Cancelled, Completed, or Other"
+      - name: attributed_payor
+        data_type: string
+        description:
+          "Reviewer-honored attributed payor effective in the appointment's
+          month (int_attribution_payor_slots_pit -> backendbaas
+          attribution_decisions). Null when unattributed or the dual-attribution
+          decision is pending for that month."
+      - name: attributed_payor_as_of_month
+        data_type: date
+        description: "Roster as-of month grounding the appointment's attributed payor"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp tracking when upstream data last changed
+          (replaces refresh_timestamp for CDF-accurate change detection)"
+
+  - name: wellness_visits
+    description: >
+      AWV wellness fact with eligible, completed, scheduled, and projected
+      metrics by Attribution/Clinic/Provider. Pre-aggregated from Salesforce
+      appointment data. Grain: One row per Attribution x Clinic x Provider
+      combination.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - report_date
+              - attribution_payor
+              - clinic_name
+              - provider_name
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: report_date
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: report_date
+        data_type: date
+        description: "Report date for AWV metrics snapshot"
+      - name: attribution_payor
+        data_type: string
+        description: "{{ doc('payor_type') }}"
+      - name: clinic_name
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: provider_name
+        data_type: string
+        description: "{{ doc('provider_name') }}"
+      - name: eligible_count
+        data_type: bigint
+        description: "{{ doc('eligible_patient') }} count"
+      - name: completed_count
+        data_type: bigint
+        description: "AWV completed YTD count"
+      - name: scheduled_count
+        data_type: bigint
+        description: "AWV appointments currently scheduled (future)"
+      - name: not_scheduled_count
+        data_type: bigint
+        description: "Eligible patients with no scheduled AWV"
+      - name: cancelled_count
+        data_type: bigint
+        description: "AWV appointments cancelled YTD"
+      - name: completion_rate
+        data_type: "decimal(10,0)"
+        description: "{{ doc('awv_completion_rate') }}"
+      - name: cancellation_rate
+        data_type: "decimal(10,0)"
+        description: "AWV cancellation rate (cancelled / eligible)"
+      - name: projected_completed_count
+        data_type: "decimal(10,0)"
+        description: "Projected AWV completions accounting for scheduled × (1 -
+          cancellation rate)"
+      - name: projected_completion_rate
+        data_type: "decimal(10,0)"
+        description: "{{ doc('awv_projected_completion') }}"
+      - name: schedules_needed_for_90pct
+        data_type: "decimal(10,0)"
+        description: "Additional AWV schedules needed to reach 90% completion target"
+
+  - name: behavioral_health
+    description: >
+      Behavioral health patient panel fact with clinical outcome scores
+      (PHQ-9/GAD-7), treatment response flags, and scheduling activity metrics.
+      Grain: One row per patient MRN.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      # Schema drift blocks deploy — protects patient attribution dashboard cards
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: decimal(10,0)
+        description: "{{ doc('patient_id') }}"
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: baseline_phq_score
+        data_type: int
+        description: "First clinically significant PHQ-9 score (> 0)"
+      - name: latest_phq_score
+        data_type: int
+        description: "Most recent PHQ-9 score"
+      - name: phq_in_remission
+        data_type: int
+        description: "PHQ-9 remission flag (latest score < 5)"
+      - name: phq_response
+        data_type: int
+        description: "PHQ-9 response flag (>= 50% reduction from baseline)"
+      - name: has_next_bh_appointment
+        data_type: boolean
+        description: "True if patient has a future BH appointment scheduled"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID from EMPI identity bridge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: patient_last_name
+        data_type: string
+        description: "Patient last name"
+      - name: patient_first_name
+        data_type: string
+        description: "Patient first name"
+      - name: bh_provider_name
+        data_type: string
+        description: "Behavioral health provider name"
+      - name: bh_provider_id
+        data_type: decimal(10,0)
+        description:
+          "MDM-validated BH provider ID sourced from appointment scheduling
+          provider mapping"
+      - name: pcp_name
+        data_type: string
+        description: "Primary care provider name"
+      - name: clinic_name
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: program_name
+        data_type: string
+        description: "BH program name (e.g. CoCM, Traditional)"
+      - name: patient_tier
+        data_type: string
+        description: "Patient risk tier"
+      - name: bh_tier
+        data_type: string
+        description:
+          "Behavioral health-specific tier classification (Low/Moderate/High
+          from Athena Quickview)"
+      - name: bh_program_status
+        data_type: string
+        description: >
+          Athena Quickview "BH Program Participation" raw value: Low / Moderate
+          / High (active panel) or Graduated / Disenrolled / Declined
+          (inactive).
+      - name: is_active_bh_panel
+        data_type: boolean
+        description: >
+          True when patient is active in the BH panel (BH Program Participation
+          is not Graduated/Disenrolled/Declined). Drives panel filtering for
+          BIPlatform / metric-view measures and the BH No Next report so historical
+          rows survive the incremental merge while disappearing from active
+          dashboards.
+      - name: has_bh_care_plan
+        data_type: int
+        description: "Legacy flag: 1 if patient has an active Athena Behavioral treatment plan (PLANTYPE = Behavioral), 0 otherwise"
+      - name: has_bh_treatment_plan
+        data_type: int
+        description: "1 if patient has a BH treatment plan, 0 otherwise"
+      - name: has_active_cm_care_plan
+        data_type: int
+        description: "1 if patient has any active CM care plan (Longitudinal or Behavioral), 0 otherwise"
+      - name: has_active_cm_with_events
+        data_type: int
+        description: "1 if patient has an active CM care plan and at least one logged cmcareevent, 0 otherwise"
+      - name: baseline_gad_score
+        data_type: int
+        description: "First clinically significant GAD-7 score (> 0)"
+      - name: baseline_gad_date
+        data_type: date
+        description: "Date of baseline GAD-7 assessment"
+      - name: baseline_phq_date
+        data_type: date
+        description: "Date of baseline PHQ-9 assessment"
+      - name: intake_gad_score
+        data_type: int
+        description: "GAD-7 score at intake"
+      - name: intake_phq_score
+        data_type: int
+        description: "PHQ-9 score at intake"
+      - name: intake_date
+        data_type: date
+        description: "Date of BH intake assessment"
+      - name: latest_gad_score
+        data_type: int
+        description: "Most recent GAD-7 score"
+      - name: latest_gad_date
+        data_type: date
+        description: "Date of most recent GAD-7 assessment"
+      - name: latest_phq_date
+        data_type: date
+        description: "Date of most recent PHQ-9 assessment"
+      - name: gad_point_change
+        data_type: int
+        description: "Point change from baseline to latest GAD-7 score"
+      - name: phq_point_change
+        data_type: int
+        description: "Point change from baseline to latest PHQ-9 score"
+      - name: gad_pct_response
+        data_type: decimal(10,0)
+        description: "GAD-7 percentage reduction from baseline"
+      - name: phq_pct_response
+        data_type: decimal(10,0)
+        description: "PHQ-9 percentage reduction from baseline"
+      - name: gad_in_remission
+        data_type: int
+        description: "GAD-7 remission flag (latest score < 5)"
+      - name: gad_reliable_change
+        data_type: int
+        description: "GAD-7 reliable change index flag"
+      - name: phq_reliable_change
+        data_type: int
+        description: "PHQ-9 reliable change index flag"
+      - name: gad_response
+        data_type: int
+        description: "GAD-7 response flag (>= 50% reduction from baseline)"
+      - name: bh_visits_last_30d
+        data_type: bigint
+        description: "Count of BH visits in the last 30 days"
+      - name: last_bh_visit_date
+        data_type: date
+        description: "Date of most recent BH visit"
+      - name: cocm_minutes_current_month
+        data_type: decimal(10,0)
+        description: "CoCM minutes logged in the current month"
+      - name: cocm_minutes_prior_month
+        data_type: decimal(10,0)
+        description: "CoCM minutes logged in the prior month"
+      - name: bh_visits_current_month
+        data_type: bigint
+        description: "Count of BH visits in the current month"
+      - name: bh_visits_prior_month
+        data_type: bigint
+        description: "Count of BH visits in the prior month"
+      - name: next_bh_appointment_date
+        data_type: date
+        description: "Date of next scheduled BH appointment"
+      - name: next_bh_provider
+        data_type: string
+        description: "Provider for next scheduled BH appointment"
+      - name: prior_auth_status
+        data_type: string
+        description: "Status of the most recent Behavioral Health prior authorization"
+      - name: prior_auth_start_date
+        data_type: date
+        description: "Start date of the BH prior authorization"
+      - name: prior_auth_expiration_date
+        data_type: date
+        description: "Expiration date of the BH prior authorization"
+      - name: prior_auth_visits_approved
+        data_type: decimal(12,0)
+        description: "Number of visits approved"
+      - name: prior_auth_visits_left
+        data_type: decimal(12,0)
+        description: "Number of visits remaining on auth"
+      - name: source_updated_at
+        data_type: timestamp
+        description: >
+          CDF watermark — GREATEST of v_bhpatientpanel.source_updated_at and
+          patients.last_updated_at. Required for ServingDB TRIGGERED sync mode.
+        constraints:
+          - type: not_null
+        tests:
+          - not_null
+
+  - name: scheduling_capacity
+    description: >
+      Provider scheduling capacity fact. One row per appointment slot with
+      provider, location, and appointment type dimension enrichment. Grain: One
+      row per appointment slot.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      # Daily scheduling slots — drop means provider template sync broke
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: appointment_date
+            time_bucket:
+              period: day
+              count: 1
+          config:
+            severity: warn
+            tags: ["elementary", "data_volume"]
+      # MERGE-never-deletes drift: appointment_ids that no longer exist in vw_provider_capacity
+      # (slots dropped from stg_scheduling__slots when appointmentdeleteddatetime is set or
+      # department changes to 11). 2,752 phantoms cleaned 2026-04-28.
+      - no_filter_drift:
+          arguments:
+            key_column: appointment_id
+            source_model: vw_provider_capacity
+            source_key_column: APPOINTMENT_ID
+          config:
+            severity: warn
+            tags: ["elementary", "filter_drift", "data_quality"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: appointment_id
+        data_type: decimal(10,0)
+        description: "Appointment/Slot ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: provider_id
+        data_type: decimal(10,0)
+        description: "Athena Provider ID"
+      - name: provider_name
+        data_type: string
+        description: "{{ doc('provider_name') }}"
+      - name: clinic_name
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: is_open_slot
+        data_type: boolean
+        description: "True if slot status starts with 'o' (Open Slot). Uses
+          is_athena_open_slot macro."
+      - name: is_booked_slot
+        data_type: boolean
+        description: "True if slot status starts with 'f' (Filled/Booked). Uses
+          is_athena_scheduled macro."
+      - name: is_completed_slot
+        data_type: boolean
+        description:
+          "True if appointment status is Checked In, Checked Out, or Charge
+          Entered. Uses is_athena_completed macro."
+      - name: is_cancelled_slot
+        data_type: boolean
+        description: "True if slot status starts with 'x' (Cancelled). Uses
+          is_athena_cancelled macro."
+      - name: slot_status
+        data_type: string
+        description:
+          "Derived slot status: Open, Filled, Cancelled, Completed, or Other.
+          Mapped from Athena status prefixes via healthcare_constants macros."
+      - name: appointment_date
+        data_type: date
+        description:
+          "Calendar date of the appointment slot from Athena. Used for
+          capacity planning and scheduling window analysis."
+      - name: provider_clinic
+        data_type: string
+        description: "Provider's assigned clinic name"
+      - name: is_physician
+        data_type: boolean
+        description: "True if provider is a physician (MD/DO)"
+      - name: is_mid_level
+        data_type: boolean
+        description: "True if provider is a mid-level (NP/PA)"
+      - name: assigned_clinic
+        data_type: string
+        description: "Provider's assigned clinic from MDM"
+      - name: provider_is_active
+        data_type: boolean
+        description: "True if provider is currently active (not terminated)"
+      - name: provider_termination_date
+        data_type: date
+        description: "Provider termination date from MDM, null if active"
+      - name: has_assigned_provider
+        data_type: boolean
+        description:
+          "True if PROVIDERID was set on the appointment; false if resolved
+          via SCHEDULINGPROVIDERID"
+      - name: department_name
+        data_type: string
+        description: "Athena department name"
+      - name: is_patient_facing
+        data_type: boolean
+        description: "True if clinic is a patient-facing location"
+      - name: appointment_type_name
+        data_type: string
+        description: "Full appointment type name from Athena"
+      - name: visit_category
+        data_type: string
+        description: "Derived visit category from appointment_types dimension"
+      - name: is_patient_visit
+        data_type: boolean
+        description: "True if this is a qualifying patient visit per MDM classification"
+      - name: is_awv
+        data_type: boolean
+        description: "{{ doc('awv_visit') }}"
+      - name: is_behavioral_health
+        data_type: boolean
+        description: "Behavioral health visit flag from MDM appointment type classification"
+      - name: is_telehealth
+        data_type: boolean
+        description: "True if appointment is a telehealth visit"
+      - name: is_ancillary
+        data_type: boolean
+        description: "True if this is an ancillary visit (lab, imaging, etc.)"
+      - name: appointment_status
+        data_type: string
+        description: "Raw Athena appointment status"
+      - name: is_initial_visit_slot
+        data_type: boolean
+        description: "True if slot is for an initial/new patient visit"
+      - name: is_future
+        data_type: boolean
+        description: "True if appointment date is in the future"
+      - name: days_from_today
+        data_type: int
+        description: "Number of days from today to the appointment date"
+      - name: slot_duration_minutes
+        data_type: decimal(10,0)
+        description: "Duration of the appointment slot in minutes"
+      - name: source_updated_at
+        data_type: timestamp
+        description: >
+          Source-system change-tracking timestamp passed through from
+          vw_provider_capacity (originally athena.appointment.LASTUPDATED). Used
+          for CDF-safe incremental merge via matched_condition.
+
+  - name: attribution_history
+    description: >
+      Historical patient-payor attribution fact. Sourced from
+      vw_historical_attribution (EMPI-matched payor files). Tracks patient-payor
+      attribution over time for VBC reporting. Payors: PAYOR_A, PAYOR_B (includes MSSP
+      ACO), PAYOR_C, Payor Delta, Medicare. Grain: One row per golden_id x
+      payor x as_of_month. PAYOR_A roster-only identities are retained even without
+      an Athena chart. The incremental post-hook deletes only PAYOR_A
+      identity/payor/month rows that no longer exist in
+      vw_historical_attribution; patient status does not filter attribution.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "attribution"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - identity_id
+              - attributed_payor
+              - as_of_month
+      # Fail the model if payor member counts shift by more than 20% between months
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: as_of_month
+            time_bucket:
+              period: month
+              count: 1
+            sensitivity: 3
+          config:
+            severity: error
+            tags: ["elementary", "shift_guard"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+        # Nullable for roster-only ghosts without an approved EMPI golden record.
+      - name: identity_id
+        data_type: string
+        description: >
+          {{ doc('identity_id') }} This stable surviving identity is the
+          referential-integrity key; historical golden_id aliases may remain after
+          EMPI merges and are not valid current-identity relationship keys.
+        constraints:
+          - type: not_null
+        tests:
+          - relationships:
+              arguments:
+                to: ref('patient_identity')
+                field: identity_id
+              config:
+                severity: error
+                where: "match_status = 'MATCHED' and is_ghost = false"
+                tags: ["referential_integrity", "empi"]
+      - name: entity_id
+        data_type: string
+        description: "{{ doc('entity_id') }}"
+      - name: is_ghost
+        data_type: boolean
+        description: "True when the EMPI identity has no Athena chart (payor-origin roster member)."
+      - name: is_vendorblue
+        data_type: boolean
+        description: >
+          True when this PAYOR_B H2001 attribution row's effective attributed clinic
+          TIN equals the VendorBlue TIN (204841281). Always false for non-PAYOR_B
+          payors. Point-in-time per as_of_month.
+      - name: match_status
+        data_type: string
+        description: "EMPI match state: MATCHED, ROSTER_ONLY, or approval workflow status."
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID from EMPI identity bridge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: patient_first_name
+        data_type: string
+        description: "Patient first name from payor roster file"
+      - name: patient_last_name
+        data_type: string
+        description: "Patient last name from payor roster file"
+      - name: patient_name
+        data_type: string
+        description: "Full patient name (first + last) for drill-through display"
+      - name: patient_date_of_birth
+        data_type: string
+        description: "Patient date of birth from payor roster file"
+      - name: patient_gender
+        data_type: string
+        description: "Patient gender from payor roster file"
+      - name: attributed_payor
+        data_type: string
+        description:
+          "Standardized payor name: PAYOR_A, PAYOR_B, PAYOR_C, PAYOR_DELTA, AHA,
+          MEDICARE"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  ["PAYOR_A", "PAYOR_B", "PAYOR_C", "PAYOR_DELTA", "MEDICARE", "AHA"]
+              config:
+                severity: error
+      - name: payor_member_id
+        data_type: string
+        description:
+          "Payor-assigned member ID (MBI for Medicare, subscriber ID for
+          commercial)"
+      - name: market_segment
+        data_type: string
+        description: "Payor market segment classification"
+      - name: attribution_subtype
+        data_type: string
+        description: >
+          Payor-specific classification. PAYOR_A: value_program_indicator. PAYOR_B:
+          mbr_typ_cd (M&R, GRP, CSNP, DSNP). Medicare: MSSP roster mbr_typ_cd
+          (e.g. Aged/Non-Dual, Aged/Dual, Disabled) — not retired CMS CLAIMS_STEP labels.
+      - name: attributed_provider_npi
+        data_type: string
+        description: >
+          Payor-supplied 10-digit NPI of the attributed PCP. Populated for PAYOR_A
+          (numeric provider_id), PAYOR_B (assoc_prov_npi, Healthcare Org TIN only),
+          AHA (npi), and MSSP-when-numeric. NULL for PAYOR_C, Payor Delta,
+          Medicare-FFS, and rows where the payor did not supply a valid NPI.
+      - name: attributed_provider_name
+        data_type: string
+        description: >
+          Payor-supplied raw attributed-provider name string (verbatim, e.g.
+          "BAUER, N.P., LEAH R." or "TARA L MCCULLOUGH CNP (08235700)"). Use
+          attributed_provider_id / attributed_provider_mdm_name for canonical
+          display.
+      - name: attributed_provider_id
+        data_type: decimal(38,0)
+        description: >
+          Resolved Athena provider_id from MDM provider master. Sourced via
+          int_attribution_provider_match (NPI-first, normalized-name fallback
+          against providers.payor_match_keys, then unique-last-name fallback).
+          NULL when no MDM match (typically external/referring providers). Use
+          this for joins to providers / Salesforce Contact.
+      - name: attributed_provider_mdm_name
+        data_type: string
+        description: >
+          Canonical MDM provider_name for the resolved attributed provider (e.g.
+          "Leah Carver"). NULL when unmatched.
+      - name: attributed_provider_mdm_npi
+        data_type: string
+        description: >
+          Canonical MDM NPI for the resolved attributed provider. NULL when
+          unmatched.
+      - name: attributed_provider_match_method
+        data_type: string
+        description: >
+          How the attributed provider was resolved: 'npi' (exact NPI join),
+          'name' (normalized full-name match against
+          providers.payor_match_keys), 'last_name' (PAYOR_A-style row where only
+          provider_last_name was given and exactly one MDM provider has that
+          surname), or 'unmatched'. NULL for Medicare-FFS rows.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["npi", "name", "last_name", "unmatched"]
+              config:
+                severity: warn
+      - name: as_of_month
+        data_type: date
+        description: "Attribution effective month (first of month date)"
+        constraints:
+          - type: not_null
+      - name: attribution_year
+        data_type: int
+        description: "Year extracted from as_of_month for time-series filtering"
+      - name: attribution_month
+        data_type: int
+        description: "Month extracted from as_of_month for time-series filtering"
+      - name: year_month
+        data_type: string
+        description: "Attribution year-month (yyyy-MM format)"
+      - name: is_current_attribution
+        data_type: boolean
+        description:
+          "True if this is from the most recent attribution release for this
+          payor"
+      - name: match_type
+        data_type: string
+        description: "EMPI match method: MBI_DETERMINISTIC or PROBABILISTIC"
+      - name: match_confidence
+        data_type: double
+        description: "EMPI match confidence score (1.0 for MBI, 0.70-1.0 for probabilistic)"
+      - name: file_source
+        data_type: string
+        description: "Source payor roster file name for audit trail"
+      - name: patient_status
+        data_type: string
+        description: "Patient status from patients dimension (Active, Inactive, etc.)"
+      - name: is_active_patient
+        data_type: boolean
+        description:
+          "True if patient is currently active (completed visit within 18
+          months)"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system update watermark for CDF-safe incremental MERGE;
+          greatest of underlying source timestamps."
+
+  - name: operating_review
+    description: >
+      Operating review patient fact with status, location, insurance, tier,
+      scheduling, and patient action flags. Enriched with EMPI identity bridge
+      for cross-system lookup. Includes four point-in-time patient action flags
+      (is_no_next, is_bh_no_next, is_pending_awv, is_pending_mddo) sourced from
+      MDM appointment_type and provider classifications. All appointment status
+      checks use centralized Athena status macros for consistency. Grain: One
+      row per patient_id.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: decimal(10,0)
+        description: "{{ doc('patient_id') }}"
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID (18-char) from EMPI identity bridge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "{{ doc('enterprise_id') }}"
+      - name: provider_group_id
+        data_type: string
+        description: "{{ doc('provider_group_id') }}"
+      - name: patient_status
+        data_type: string
+        description: "{{ doc('patient_status') }}"
+      - name: service_location
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: clinic_name
+        data_type: string
+        description: "MDM-standardized clinic name from clinics dimension"
+      - name: is_patient_facing
+        data_type: boolean
+        description:
+          "True if clinic is a patient-facing location (excludes MIDI, Main
+          Office, Vaccine Clinic)"
+      - name: clinic_type
+        data_type: string
+        description: "Clinic classification from clinics dimension"
+      - name: clinic_city
+        data_type: string
+        description: "City of the patient's assigned clinic"
+      - name: clinic_state
+        data_type: string
+        description: "State of the patient's assigned clinic"
+      - name: tier
+        data_type: string
+        description: "Patient risk tier (Highly Complex, High Risk, Rising Risk, Low Risk)"
+      - name: primary_insurance
+        data_type: string
+        description: "Primary insurance name resolved via waterfall or patientinsurance"
+      - name: payor_category
+        data_type: string
+        description: "{{ doc('payor_category') }}"
+      - name: attributed_payor
+        data_type: string
+        description: "{{ doc('attributed_payor') }}"
+      - name: has_next_visit
+        data_type: int
+        description:
+          "1 if patient has a future qualifying medical visit scheduled, 0
+          otherwise"
+      - name: next_visit_date
+        data_type: date
+        description:
+          "Date of the patient's next scheduled qualifying medical visit
+          (Patient_Visit = true, NOT BH, NOT Ancillary per MDM). NULL if no
+          future qualifying visit exists."
+      - name: scheduling_status
+        data_type: string
+        description:
+          "'Scheduled' if has_next_visit = 1, 'Not Scheduled' otherwise.
+          Based on qualifying medical visits only — a patient with only a future
+          BH or lab visit is 'Not Scheduled'."
+      - name: cadence_status
+        data_type: string
+        description:
+          "Patient visit cadence classification based on days since last
+          visit vs. risk tier thresholds: Low Risk (274 days), Rising Risk (68
+          days), High Risk (45 days), Highly Complex (23 days). Values: On
+          Cadence, Overdue, or NULL."
+      - name: is_no_next
+        data_type: boolean
+        description: '{{ doc("is_no_next") }}'
+      - name: is_bh_no_next
+        data_type: boolean
+        description: '{{ doc("is_bh_no_next") }}'
+      - name: is_pending_awv
+        data_type: boolean
+        description: '{{ doc("is_pending_awv") }}'
+      - name: is_pending_mddo
+        data_type: boolean
+        description: '{{ doc("is_pending_mddo") }}'
+      - name: next_bh_visit_date
+        data_type: date
+        description:
+          "Date of the patient's next scheduled Behavioral Health visit (MDM
+          Behavioral_Health_Visit = true, status = Filled). NULL if no future BH
+          visit exists."
+      - name: has_awv_completed_ytd
+        data_type: int
+        description:
+          "1 if patient has a completed AWV (Checked In, Checked Out, or
+          Charge Entered) in the current calendar year, 0 otherwise"
+      - name: has_awv_scheduled_ytd
+        data_type: int
+        description:
+          "1 if patient has a future AWV scheduled (status Filled) in the
+          current calendar year, 0 otherwise"
+      - name: has_mddo_completed_ytd
+        data_type: int
+        description:
+          "1 if patient has a completed MD/DO visit (Checked In, Checked Out,
+          or Charge Entered) with a PROVIDERTYPE IN (MD, DO) provider in the
+          current calendar year, 0 otherwise"
+      - name: has_mddo_scheduled_ytd
+        data_type: int
+        description:
+          "1 if patient has a future MD/DO visit scheduled (status Filled)
+          with a PROVIDERTYPE IN (MD, DO) provider in the current calendar year,
+          0 otherwise"
+      - name: last_completed_visit_date
+        data_type: date
+        description:
+          "Date of the patient's most recent completed visit (Checked In,
+          Checked Out, or Charge Entered). Drives 18-month active status rule
+          and 12-month engagement calculation."
+      - name: first_visit_date
+        data_type: timestamp
+        description:
+          "Date of the patient's first completed visit at Healthcare Org
+          (Checked In, Checked Out, or Charge Entered). Used for new patient
+          cohort analysis and enrollment_month derivation."
+      - name: enrollment_month
+        data_type: timestamp
+        description: "{{ doc('enrollment_month') }}"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp tracking when upstream data last changed
+          (Athena, MDM, EMPI). Used for data freshness monitoring and
+          pre-aggregation invalidation."
+
+  - name: patient_experience
+    description: >
+      Provider NPS survey responses with satisfaction scores and AI-powered
+      sentiment analysis. Enriched with patient identity bridge. Grain: One row
+      per survey response.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: survey_id
+        data_type: string
+        description: "Salesforce Appointment ID (unique per survey)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: patient_id
+        data_type: decimal(10,0)
+        description: "{{ doc('patient_id') }}"
+      - name: provider_name
+        data_type: string
+        description: "{{ doc('provider_name') }}"
+      - name: clinic_name
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: recommend_score
+        data_type: decimal(10,0)
+        description: "Likely to recommend clinic score (1-5)"
+      - name: nps_category
+        data_type: string
+        description: "Promoter (5), Passive (4), Detractor (1-3)"
+      - name: sentiment
+        data_type: string
+        description: "AI-classified sentiment: POSITIVE, NEGATIVE, NEUTRAL, MIXED"
+      - name: survey_date
+        data_type: date
+        description: "Date of the survey/appointment"
+      - name: appointment_id
+        data_type: decimal(10,0)
+        description: "Athena Appointment ID linked to the survey"
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID from EMPI identity bridge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: survey_year
+        data_type: int
+        description: "Year extracted from survey_date"
+      - name: survey_month
+        data_type: int
+        description: "Month extracted from survey_date"
+      - name: appointment_type
+        data_type: string
+        description: "Appointment type associated with the survey"
+      - name: clinic_satisfaction_score
+        data_type: decimal(10,0)
+        description: "Clinic satisfaction score from survey"
+      - name: followup_satisfaction_score
+        data_type: decimal(10,0)
+        description: "Follow-up satisfaction score from survey"
+      - name: provider_satisfaction_score
+        data_type: decimal(10,0)
+        description: "Provider satisfaction score from survey"
+      - name: avg_satisfaction_score
+        data_type: decimal(10,0)
+        description: "Average of all satisfaction scores for this survey"
+      - name: survey_comments
+        data_type: string
+        description: "Free-text survey comments from the patient"
+      - name: source_updated_at
+        data_type: timestamp
+        description: "Source-system update watermark for CDF-safe incremental MERGE."
+
+  - name: transitional_care
+    description: >
+      Transitional Care Management (TCM) fact tracking post-discharge
+      follow-ups, readmission monitoring, and care coordinator outreach.
+      Enriched with EMPI identity. Source: healthcare.vw_tcm_dashboard. Grain:
+      One row per TCM case.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "tcm", "care_management"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: case_number
+        data_type: string
+        description: "TCM case number"
+        tests:
+          - unique
+          - not_null:
+              config:
+                severity: warn
+      - name: hospital
+        data_type: string
+        description: "Discharging hospital/facility name"
+      - name: discharge_date
+        data_type: timestamp
+        description: "Date of hospital discharge"
+      - name: toc_appointment_date
+        data_type: date
+        description: "Date of scheduled TOC follow-up appointment"
+      - name: tcm_visit_status
+        data_type: string
+        description: "TCM visit status: Completed, Scheduled, Pending, etc."
+      - name: care_coordinator
+        data_type: string
+        description: "Assigned care coordinator name"
+      - name: is_readmission
+        data_type: boolean
+        description: "True if the case is a readmission within 30 days"
+      - name: is_high_utilizer
+        data_type: boolean
+        description: "True if the patient is a high-utilizer (3+ admissions in 12 months)"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: days_to_toc_appointment
+        data_type: int
+        description: "Calendar days from discharge to TOC appointment"
+      - name: appointment_status
+        data_type: string
+        description: "Status of the TOC follow-up appointment"
+      - name: is_delayed_notification
+        data_type: boolean
+        description: "True if hospital discharge notification was delayed"
+      - name: business_days_to_first_call
+        data_type: int
+        description: "Business days from discharge to first outreach call"
+      - name: admission_date
+        data_type: timestamp
+        description: "Date of hospital admission"
+      - name: length_of_stay_days
+        data_type: int
+        description: "Length of hospital stay in days"
+      - name: diagnosis_code
+        data_type: string
+        description: "ICD-10 diagnosis code for the discharge"
+      - name: diagnosis_description
+        data_type: string
+        description: "Description of the discharge diagnosis"
+      - name: met_7day_followup
+        data_type: boolean
+        description: "True if TOC follow-up occurred within 7 days of discharge"
+      - name: met_14day_followup
+        data_type: boolean
+        description: "True if TOC follow-up occurred within 14 days of discharge"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "CDC watermark from upstream tcm_visit — GREATEST of source-system
+          timestamps"
+
+  - name: new_patient_visits
+    description: >
+      Unified NPV + Membership tracking fact. Tracks NPV counts, completion,
+      cancellation, and recovery categories. Enriched with EMPI identity and
+      patients membership context (MDM insurance principle). Single source
+      of truth for all NPV metrics. Source:
+      healthcare.vw_npv_self_service_report + vw_operating_review_appointments +
+      patients. Grain: One row per appointment.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "npv", "growth"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: appointment_id
+        data_type: bigint
+        description: "Athena Appointment ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: appointment_date
+        data_type: date
+        description: "Date of the new patient appointment"
+      - name: service_location
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: provider_name
+        data_type: string
+        description: "{{ doc('provider_name') }}"
+      - name: recovery_category
+        data_type: string
+        description:
+          "NPV recovery classification: Immediate Reschedule, Late Recovery,
+          Truly Lost"
+      - name: is_npv
+        data_type: boolean
+        description: "True if classified as a New Patient Visit"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: year_month
+        data_type: string
+        description: "Appointment year-month (yyyy-MM format)"
+      - name: month_name
+        data_type: string
+        description: "Full month name of the appointment date"
+      - name: appointment_year
+        data_type: int
+        description: "Year extracted from appointment_date"
+      - name: month_number
+        data_type: int
+        description: "Month number (1-12) from appointment_date"
+      - name: week_of_year
+        data_type: int
+        description: "ISO week of year from appointment_date"
+      - name: day_of_week
+        data_type: string
+        description: "Day of week name from appointment_date"
+      - name: clinic_city
+        data_type: string
+        description: "City of the appointment clinic"
+      - name: appointment_type
+        data_type: string
+        description: "Full appointment type name"
+      - name: appointment_type_short
+        data_type: string
+        description: "Abbreviated appointment type name"
+      - name: appointment_status
+        data_type: string
+        description: "Raw Athena appointment status"
+      - name: npv_category
+        data_type: string
+        description: "NPV category classification"
+      - name: is_awv
+        data_type: boolean
+        description: "{{ doc('awv_visit') }}"
+      - name: is_telehealth
+        data_type: boolean
+        description: "True if appointment is a telehealth visit"
+      - name: was_cancelled
+        data_type: boolean
+        description: "True if the appointment was cancelled"
+      - name: was_completed
+        data_type: boolean
+        description: "True if the appointment was completed"
+      - name: was_no_show
+        data_type: boolean
+        description: "True if the patient was a no-show"
+      - name: is_future
+        data_type: boolean
+        description: "True if appointment date is in the future"
+      - name: immediately_rescheduled
+        data_type: boolean
+        description: "True if appointment was immediately rescheduled after cancellation"
+      - name: late_recovery
+        data_type: boolean
+        description:
+          "True if appointment was recovered after initial cancellation (not
+          immediate)"
+      - name: cancellation_datetime
+        data_type: timestamp
+        description: "Date/time the appointment was cancelled"
+      - name: cancellation_reason
+        data_type: string
+        description: "Reason for appointment cancellation"
+      - name: cancelled_by
+        data_type: string
+        description: "User who cancelled the appointment"
+      - name: rescheduled_to_appointment_id
+        data_type: bigint
+        description: "Appointment ID this was rescheduled to"
+      - name: reschedule_datetime
+        data_type: timestamp
+        description: "Date/time the appointment was rescheduled"
+      - name: npv_count
+        data_type: int
+        description: "NPV count flag (1 if NPV, 0 otherwise)"
+      - name: cancelled_count
+        data_type: int
+        description: "Cancelled count flag (1 if cancelled, 0 otherwise)"
+      - name: completed_count
+        data_type: int
+        description: "Completed count flag (1 if completed, 0 otherwise)"
+      - name: no_show_count
+        data_type: int
+        description: "No-show count flag (1 if no-show, 0 otherwise)"
+      - name: immediate_reschedule_count
+        data_type: int
+        description: "Immediate reschedule count flag"
+      - name: late_recovery_count
+        data_type: int
+        description: "Late recovery count flag"
+      - name: truly_lost_count
+        data_type: int
+        description: "Truly lost count flag (cancelled with no recovery)"
+      - name: total_recovered_count
+        data_type: int
+        description: "Total recovered count (immediate + late recovery)"
+      - name: slot_status
+        data_type: string
+        description: "Derived slot status: Open, Filled, Cancelled, Completed, or Other"
+      - name: source_updated_at
+        data_type: timestamp
+        description: "Source-system change-tracking timestamp for CDF/ServingDB refresh"
+      - name: is_membership_patient
+        data_type: boolean
+        description: "True if patient is in membership population (MDM insurance
+          principle: commercial, non-government)"
+      - name: member_category
+        data_type: string
+        description:
+          "Established (first_scheduled < 2025-11-03) or Net New Member; NULL
+          for non-membership"
+      - name: membership_enrollment
+        data_type: string
+        description: "Salesforce membership enrollment status"
+      - name: membership_plan_type
+        data_type: string
+        description: "Membership plan type from Membership Platform billing"
+      - name: primary_product_type
+        data_type: string
+        description: "MDM-standardized insurance product type"
+      - name: primary_payor
+        data_type: string
+        description: "MDM-standardized primary insurance payor"
+      - name: primary_government_funded_type
+        data_type: string
+        description: "Government-funded insurance classification for MDM exclusion"
+      - name: legacy_membership_eligible
+        data_type: boolean
+        description: "True if patient was legacy membership eligible per Salesforce flag"
+
+  - name: referral_management
+    description: >
+      Clinical order and referral tracking fact. Monitors referral lifecycle
+      from order through completion with turnaround metrics. Enriched with EMPI
+      identity. Source: healthcare.vw_referral_management. Grain: One row per
+      clinical order document.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "referrals", "care_coordination"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: appointment_date
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: document_id
+        data_type: bigint
+        description: "Clinical order document ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: clinical_order_type
+        data_type: string
+        description: "Type of clinical order (Referral, Lab, Imaging, etc.)"
+      - name: referral_status_category
+        data_type: string
+        description: "Simplified status: Open or Closed"
+      - name: order_datetime
+        data_type: timestamp
+        description: "Date/time the order was placed"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: order_document_id
+        data_type: bigint
+        description: "Order-level document ID"
+      - name: provider_id
+        data_type: bigint
+        description: "Ordering provider ID"
+      - name: department_id
+        data_type: bigint
+        description: "Department ID where the order was placed"
+      - name: appointment_id
+        data_type: bigint
+        description: "Linked appointment ID if applicable"
+      - name: appointment_type_id
+        data_type: bigint
+        description: "Linked appointment type ID"
+      - name: order_status
+        data_type: string
+        description: "Current order status from Athena"
+      - name: document_class
+        data_type: string
+        description: "Document class classification"
+      - name: document_subclass
+        data_type: string
+        description: "Document subclass classification"
+      - name: clinical_order_type_group
+        data_type: string
+        description: "Grouping of clinical order types"
+      - name: order_text
+        data_type: string
+        description: "Free-text order description"
+      - name: order_priority
+        data_type: bigint
+        description: "Order priority level"
+      - name: referred_to_facility
+        data_type: string
+        description: "Name of the facility referred to"
+      - name: facility_city
+        data_type: string
+        description: "City of the referred facility"
+      - name: facility_state
+        data_type: string
+        description: "State of the referred facility"
+      - name: facility_npi
+        data_type: string
+        description: "NPI of the referred facility"
+      - name: created_datetime
+        data_type: timestamp
+        description: "Date/time the order was created"
+      - name: received_datetime
+        data_type: timestamp
+        description: "Date/time the order result was received"
+      - name: reviewed_datetime
+        data_type: timestamp
+        description: "Date/time the order was reviewed"
+      - name: observation_datetime
+        data_type: timestamp
+        description: "Date/time of the clinical observation"
+      - name: approved_datetime
+        data_type: timestamp
+        description: "Date/time the order was approved"
+      - name: appointment_date
+        data_type: date
+        description: "Date of the linked appointment"
+      - name: created_by
+        data_type: string
+        description: "User who created the order"
+      - name: reviewed_by
+        data_type: string
+        description: "User who reviewed the order"
+      - name: approved_by
+        data_type: string
+        description: "User who approved the order"
+      - name: assigned_to
+        data_type: string
+        description: "User the order is currently assigned to"
+      - name: result_status
+        data_type: string
+        description: "Status of the order result"
+      - name: result_status_flag
+        data_type: string
+        description: "Result status flag classification"
+      - name: result_created_datetime
+        data_type: timestamp
+        description: "Date/time the result was created"
+      - name: result_reviewed_datetime
+        data_type: timestamp
+        description: "Date/time the result was reviewed"
+      - name: appointment_status
+        data_type: string
+        description: "Status of the linked appointment"
+      - name: appointment_duration
+        data_type: int
+        description: "Duration of the linked appointment in minutes"
+      - name: encounter_type
+        data_type: string
+        description: "Type of clinical encounter"
+      - name: encounter_status
+        data_type: string
+        description: "Status of the clinical encounter"
+      - name: days_order_to_received
+        data_type: int
+        description: "Days from order placement to result received"
+      - name: days_order_to_reviewed
+        data_type: int
+        description: "Days from order placement to result reviewed"
+      - name: patient_open_order_count
+        data_type: int
+        description: "Count of open orders for this patient"
+      - name: last_updated_at
+        data_type: timestamp
+        description: "Timestamp of the last update to this order"
+
+  - name: patient_census
+    description: >
+      Daily patient census snapshot fact. All patients with engagement status,
+      payor mix, membership flags, and EMPI payor attribution. Sources: patients
+      dimension (enhanced active patient logic via int_patient_status_computed,
+      canonical insurance via int_primary_insurance), athenahealth.appointment
+      (next appointment), salesforce.contact (PCP name), stg_salesforce__account
+      (tertiary/reference payor). Columns 0-31 preserve backward-compatible
+      names and types for Azure SQL sync (dbo.VIW_PATIENT_CENSUS). EMPI payor
+      attribution at position 32+. Grain: One row per entity_id (Athena
+      patient_id or H-number) per snapshot_date.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+        servingdb_sync: true
+        servingdb_mode: TRIGGERED
+      tags: ["fact", "cube", "BIPlatform", "census", "operations"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - entity_id
+              - snapshot_date
+      # MERGE-never-deletes drift: patient_ids in census that no longer exist in patients
+      # dimension. 159 phantoms cleaned 2026-04-28; cascades from dimensions.patients drift.
+      # Census is keystone-sourced from patients, so any unknown patient_id is a true ghost.
+      #
+      # Scoped to the LATEST snapshot (latest_snapshot_column: snapshot_date). patient_census
+      # is a daily-snapshot fact keyed on (entity_id, status_date); it intentionally retains
+      # historical rows. When a patient is merged or removed upstream, `patients` cleans its
+      # own phantoms via post_hook, but patient_census's pre_hook only removes is_ghost=true
+      # rows for status_date=current_date() — historical non-ghost rows for the removed
+      # patient persist (correctly, for historical reporting). Without snapshot scoping the
+      # test would flag every historical row whose patient_id no longer exists in the
+      # current-state patients dimension, producing false drift that grows monotonically
+      # (seen 2026-07-26..31: 30 prod rows across 5 historical snapshots 07-20..07-25 for
+      # 6 patients merged ~07-26; ZERO phantoms in the latest 07-30 snapshot). Scoping to
+      # the latest snapshot restores the test's intended "true ghost in the current
+      # population" semantics.
+      - no_filter_drift:
+          arguments:
+            key_column: patient_id
+            source_model: patients
+            target_filter: "patient_id is not null and is_ghost = false"
+            latest_snapshot_column: snapshot_date
+          config:
+            severity: warn
+            tags: ["elementary", "filter_drift", "data_quality"]
+      # Daily snapshot series; seasonality avoids false alarms when weekend
+      # volumes differ from weekday averages (or weekend snapshots are skipped).
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: snapshot_date
+            time_bucket:
+              period: day
+              count: 1
+            seasonality: day_of_week
+            fail_on_zero: false
+          config:
+            severity: warn
+            tags: ["elementary", "volume", "cube_contract"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      # -- Positions 0-31: backward-compatible schema --
+      - name: patient_id
+        data_type: string
+        description: "{{ doc('patient_id') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: patient_name
+        data_type: string
+        description: "Patient full name from athenahealth"
+      - name: patient_status
+        data_type: string
+        description: "{{ doc('patient_status') }}"
+      - name: status_date
+        data_type: date
+        description: "Date the patient status was last changed"
+      - name: patient_tier
+        data_type: string
+        description: "Risk tier assignment (High Risk, Rising Risk, Low Risk)"
+      - name: first_appointment_date
+        data_type: date
+        description: "Date of patient's first appointment"
+      - name: last_appointment_date
+        data_type: date
+        description: "Date of patient's most recent appointment"
+      - name: next_appointment_date
+        data_type: date
+        description: "Date of patient's next scheduled appointment"
+      - name: no_next_appointment_flag
+        data_type: string
+        description: "Y if patient has no future appointment scheduled, No otherwise"
+      - name: assigned_clinic
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: assigned_provider
+        data_type: string
+        description: "Patient's assigned provider name"
+      - name: total_completed_visits
+        data_type: decimal(10,0)
+        description: "Total count of completed visits (DECIMAL from source)"
+      - name: days_since_last_visit
+        data_type: decimal(10,0)
+        description:
+          "Number of days since the patient's last completed visit (DECIMAL
+          from source)"
+      - name: gender
+        data_type: string
+        description: "Patient gender"
+      - name: age
+        data_type: string
+        description: "Patient age as string (e.g. '67 Years')"
+      - name: primary_insurance
+        data_type: string
+        description: "Primary insurance package name from athenahealth"
+      - name: primary_payor
+        data_type: string
+        description: "Primary payor name from athenahealth"
+      - name: secondary_insurance
+        data_type: string
+        description: "Secondary insurance package name"
+      - name: secondary_payor
+        data_type: string
+        description: "Secondary payor name"
+      - name: tertiary_payor
+        data_type: string
+        description: "Tertiary payor name"
+      - name: reference_payor
+        data_type: string
+        description: "Reference payor from athenahealth census"
+      - name: six_months_unengaged
+        data_type: boolean
+        description: "True if no completed visit in the last 6 months"
+      - name: twelve_months_unengaged
+        data_type: boolean
+        description: "True if no completed visit in the last 12 months"
+      - name: eighteen_months_inactive
+        data_type: boolean
+        description: "True if no completed visit in the last 18 months"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp tracking when upstream patient data last
+          changed. Used for CDF-accurate change detection."
+      - name: snapshot_date
+        data_type: date
+        description: "Date of the census snapshot"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Athena Enterprise ID from MDM patient"
+      - name: provider_group
+        data_type: string
+        description: "Provider group / chart group name from patient_identity"
+      - name: active_member
+        data_type: string
+        description:
+          "Yes if Salesforce Membership_Enrollment__c is Active Member or
+          Active Member - Waived"
+      - name: legacy_member
+        data_type: string
+        description: "Yes if Salesforce Legacy_Membership_Eligible__c is true"
+      - name: membership_patient
+        data_type: string
+        description:
+          "Yes if Salesforce Membership_Enrollment__c is not null (any
+          membership record)"
+      # -- Position 32+: new columns --
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      # Single reviewer-honored attributed payor + As-Of Month for grounding
+      # (int_attribution_payor_slots -> backendbaas attribution_decisions).
+      - name: attributed_payor
+        data_type: string
+        description:
+          "Reviewer-honored attributed payor: sole roster payor when one,
+          the reviewer's decided primary when dual-attributed, else null
+          (pending). Source int_attribution_payor_slots."
+      - name: attributed_payor_as_of_month
+        data_type: date
+        description: "Month of the attribution roster grounding the attributed payor."
+      - name: primary_payor_product_type
+        data_type: string
+        description:
+          "MDM insurance_product_type for the patient's current primary
+          insurance (e.g. Medicare HMO, Medicare PPO, PPO, HMO, Medicaid HMO).
+          From insurance_plans dimension via canonical_insurance_package_id."
+      - name: lob
+        data_type: string
+        description: "{{ doc('lob') }}"
+      - name: primary_insurance_2025
+        data_type: string
+        description: "{{ doc('primary_insurance_2025') }}"
+      - name: primary_payor_2025
+        data_type: string
+        description:
+          "{{ doc('primary_insurance_2025') }} — MDM payor_brand (e.g. PAYOR_A,
+          PAYOR_B, UCare, Medicare FFS)"
+      - name: primary_payor_category_2025
+        data_type: string
+        description:
+          "{{ doc('primary_insurance_2025') }} — MDM payor_category (Original
+          Medicare, Medicare Advantage, Commercial, Medicaid, Self-Pay)"
+      - name: lob_2025
+        data_type: string
+        description:
+          "{{ doc('lob') }} — frozen to the insurance policy active as of
+          December 2025"
+      - name: inactive_date
+        data_type: date
+        description:
+          "Canonical inactive transition date from int_patient_status_computed
+          (deceased date, 18-month cliff, or earliest Athena inactive audit
+          evidence). NULL when patient_status is not Inactive."
+      - name: active_date
+        data_type: date
+        description: "The date the first visit was completed (non-null when has_completed_visit is true)."
+      - name: entity_id
+        data_type: string
+        description: "{{ doc('entity_id') }}"
+        tests:
+          - not_null
+      - name: identity_id
+        data_type: string
+        description: "{{ doc('identity_id') }}"
+      - name: is_ghost
+        data_type: boolean
+        description: "True when the EMPI identity has no Athena chart (payor-origin roster member)."
+      - name: match_status
+        data_type: string
+        description: "EMPI match state: MATCHED, ROSTER_ONLY, or approval workflow status."
+      - name: active_ma_risk_patient
+        data_type: int
+        description: "{{ doc('active_ma_risk_patient') }}"
+      - name: aco_member
+        data_type: string
+        description: "Whether the patient is an ACO (Medicare Shared Savings Program) member aligned through the VendorBlue roster ('Yes' or 'No')."
+      - name: aco_alignment
+        data_type: string
+        description: "The specific assignment or alignment type for the ACO member (e.g. Voluntarily Aligned, Claims Aligned)."
+      - name: is_vendorblue
+        data_type: boolean
+        description: >
+          True when the patient's current net attributed payor is PAYOR_B and their
+          current PAYOR_B roster TIN is VendorBlue (204841281). Distinct from
+          aco_member (Original Medicare / MSSP ACO). False for all other payors.
+
+  - name: attribution_movement
+    description: >
+      Payor attribution movement analysis fact. Detects three event types per
+      patient-payor: GAINED (new attribution), RETAINED (consecutive months),
+      LOST (dropped from roster). Also identifies cross-payor SHIFTS where a
+      patient moves between payors in the same period. Includes Salesforce
+      attribution match flag for data quality monitoring. Grain: One row per
+      golden_id x payor x as_of_month x attribution_event.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "attribution", "payor"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - golden_id
+              - payor
+              - as_of_month
+              - attribution_event
+      # Fail if LOST events exceed 25% of total events in any single month
+      # (indicates possible bad file load or data corruption)
+      - elementary.column_anomalies:
+          arguments:
+            column_name: attribution_event
+          config:
+            severity: warn
+            tags: ["elementary", "shift_guard"]
+    columns:
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+        constraints:
+          - type: not_null
+      - name: athena_patient_id
+        data_type: string
+        description: "Athena patient ID from EMPI match"
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }} (cast from athena_patient_id)"
+      - name: payor
+        data_type: string
+        description: "Payor name: PAYOR_A, PAYOR_B, PAYOR_C, PAYOR_DELTA, AHA, MEDICARE"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  ["PAYOR_A", "PAYOR_B", "PAYOR_C", "PAYOR_DELTA", "MEDICARE", "AHA"]
+              config:
+                severity: error
+      - name: as_of_month
+        data_type: date
+        description: "Attribution month this event pertains to"
+        constraints:
+          - type: not_null
+      - name: prior_month
+        data_type: date
+        description: "Previous attribution month (NULL for first GAINED event)"
+      - name: attribution_event
+        data_type: string
+        description: "Event type: GAINED, RETAINED, or LOST"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["GAINED", "RETAINED", "LOST"]
+      - name: shifted_from_payor
+        data_type: string
+        description:
+          "Payor the patient was LOST from (only populated for cross-payor
+          shifts)"
+      - name: shifted_to_payor
+        data_type: string
+        description: "Payor the patient GAINED to (only populated for cross-payor shifts)"
+      - name: is_payor_shift
+        data_type: boolean
+        description: "True if this event is part of a cross-payor shift"
+      - name: patient_status
+        data_type: string
+        description: "{{ doc('patient_status') }}"
+      - name: clinic
+        data_type: string
+        description: "{{ doc('patient_facing_clinic') }}"
+      - name: primary_care_provider
+        data_type: string
+        description: "Patient's assigned PCP"
+      - name: sf_attributed_payor
+        data_type: string
+        description: "Salesforce-recorded attributed payor for comparison"
+      - name: sf_attribution_matches
+        data_type: boolean
+        description: "True if Salesforce attribution matches this payor file attribution"
+
+  - name: toc_reporting
+    description: >
+      Transitions of Care reporting fact covering clinical discharges, hospital
+      notifications, follow-up visits, and TCM billing codes. Enriched with EMPI
+      identity. Source: healthcare.tocreporting (materialized view). Grain: One
+      row per discharge event.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "toc", "care_management"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - clinical_discharge_id
+              - followup_number
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: clinical_discharge_id
+        data_type: string
+        description: "Clinical discharge event ID"
+        constraints:
+          - type: not_null
+      - name: discharge_date
+        data_type: timestamp
+        description: "Date of hospital discharge"
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient ID from EMPI identity bridge"
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: case_number
+        data_type: string
+        description: "TCM case number"
+      - name: clinic
+        data_type: string
+        description: "Patient's assigned clinic"
+      - name: diagnosis_code
+        data_type: string
+        description: "ICD-10 diagnosis code for the discharge"
+      - name: diagnosis_description
+        data_type: string
+        description: "Description of the discharge diagnosis"
+      - name: hospital
+        data_type: string
+        description: "Discharging hospital name"
+      - name: source_system
+        data_type: string
+        description: "Source system for the discharge event (ADT, manual, etc.)"
+      - name: admission_date
+        data_type: timestamp
+        description: "Date of hospital admission"
+      - name: is_high_utilizer
+        data_type: boolean
+        description: "True if the patient is a high-utilizer (3+ admissions in 12 months)"
+      - name: toc_appointment_date
+        data_type: date
+        description: "Date of scheduled TOC follow-up appointment"
+      - name: days_to_toc_appointment
+        data_type: int
+        description: "Calendar days from discharge to TOC appointment"
+      - name: business_days_to_toc_appointment
+        data_type: int
+        description: "Business days from discharge to TOC appointment"
+      - name: followup_number
+        data_type: int
+        description: "Sequence number of the follow-up attempt"
+      - name: appointment_scheduled_date
+        data_type: date
+        description: "Date the TOC appointment was scheduled"
+      - name: appointment_status
+        data_type: string
+        description: "Status of the TOC follow-up appointment"
+      - name: length_of_stay_days
+        data_type: int
+        description: "Length of hospital stay in days"
+      - name: discharge_disposition
+        data_type: string
+        description: "Discharge disposition (home, SNF, etc.)"
+      - name: is_readmission
+        data_type: boolean
+        description: "True if the case is a readmission within 30 days"
+      - name: care_coordinator
+        data_type: string
+        description: "Assigned care coordinator name"
+      - name: call_date
+        data_type: timestamp
+        description: "Date of outreach call"
+      - name: call_description
+        data_type: string
+        description: "Description of the outreach call"
+      - name: case_status
+        data_type: string
+        description: "Current status of the TCM case"
+      - name: adt_disposition
+        data_type: string
+        description: "ADT disposition from hospital notification"
+      - name: is_delayed_notification
+        data_type: boolean
+        description: "True if hospital discharge notification was delayed"
+      - name: hours_to_first_call
+        data_type: int
+        description: "Hours from discharge to first outreach call"
+      - name: business_days_to_first_call
+        data_type: int
+        description: "Business days from discharge to first outreach call"
+      - name: business_days_to_call
+        data_type: int
+        description: "Business days from discharge to this specific call"
+      - name: contact_type
+        data_type: string
+        description: "Type of outreach contact (phone, in-person, etc.)"
+      - name: contact_status
+        data_type: string
+        description: "Status of the outreach contact attempt"
+      - name: attributed_patient_flag
+        data_type: string
+        description: "Flag indicating if patient is attributed to a VBC contract"
+      - name: case_sf_id
+        data_type: string
+        description: "Salesforce Case record ID (18-char SFID)"
+      - name: met_7day_followup
+        data_type: boolean
+        description: "True if TOC follow-up occurred within 7 days of discharge"
+      - name: met_14day_followup
+        data_type: boolean
+        description: "True if TOC follow-up occurred within 14 days of discharge"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "CDC watermark from upstream tcm_visit — GREATEST of source-system
+          timestamps"
+
+  - name: heartwise
+    description: >
+      Heartwise (CHF) candidate identification fact. Identifies patients meeting
+      CHF clinical criteria and tracks program enrollment. Enriched with EMPI
+      identity. Source: healthcare.vw_heartwise_candidates. Grain: One row per
+      patient candidate.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+        # Heartwise candidate identification runs weekly. Cache-saga freshness
+        # watchdog SLO: warn after 7d, hard-fail after 14d.
+        freshness_slo_hours: 168
+        freshness_hard_fail_hours: 336
+      tags: ["fact", "cube", "BIPlatform", "heartwise", "clinical_programs"]
+    tests:
+      # Schema drift blocks deploy — protects Heartwise dashboard cards
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: bigint
+        description: "{{ doc('patient_id') }}"
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "{{ doc('golden_id') }}"
+      - name: enterprise_id
+        data_type: bigint
+        description: "Enterprise ID from source"
+      - name: first_name
+        data_type: string
+        description: "Patient first name"
+      - name: last_name
+        data_type: string
+        description: "Patient last name"
+      - name: date_of_birth
+        data_type: date
+        description: "Patient date of birth"
+      - name: heartwise_status
+        data_type: string
+        description: "Heartwise program status"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp tracking when upstream data last changed.
+          Used for CDF-accurate change detection."
+      - name: provider_group_id
+        data_type: string
+        description: "Provider group assignment from EMPI"
+      - name: chart_group_name
+        data_type: string
+        description: "Chart group name from EMPI identity bridge"
+      - name: medicare_beneficiary_id
+        data_type: string
+        description: "Medicare Beneficiary Identifier (MBI)"
+
+  - name: call_center_interactions
+    description: >
+      Call center interaction fact model. One row per NICE CXone contact (call,
+      chat, email). Joins staged contacts with agent, skill, team, and campaign
+      dimensions. Exposes timing metrics (queue wait, handle time, talk, hold,
+      ACW), routing details, disposition, and service level flags. Tagged for
+      BIPlatform / Lakeview / metric-view consumption. Source: stg_nice__contacts +
+      stg_nice__agents + stg_nice__skills + nice.team + nice.campaign. Grain:
+      One row per contact_id.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "nice", "call_center"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: contact_start_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: contact_id
+        data_type: bigint
+        description: '{{ doc("nice_contact_id") }}'
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: master_contact_id
+        data_type: bigint
+        description: "Parent contact ID for multi-leg interactions."
+      - name: contact_start_at
+        data_type: timestamp
+        description: "Timestamp when the contact started."
+      - name: contact_date
+        data_type: date
+        description: "Calendar date of the contact. Primary time dimension for trending."
+      - name: media_type
+        data_type: string
+        description: '{{ doc("nice_media_type") }}'
+      - name: point_of_contact_name
+        data_type: string
+        description:
+          "Name of the point of contact (skill or campaign) the contact was
+          routed to."
+      - name: agent_id
+        data_type: int
+        description: '{{ doc("nice_agent_id") }}'
+      - name: agent_name
+        data_type: string
+        description: "Full agent name from the agent dimension."
+      - name: agent_is_supervisor
+        data_type: boolean
+        description: "Whether the handling agent has supervisor privileges."
+      - name: team_name
+        data_type: string
+        description: "Team name the agent belongs to."
+      - name: skill_name
+        data_type: string
+        description: "Skill/queue name the contact was routed to."
+      - name: skill_sla_goal
+        data_type: int
+        description: "Target SLA percentage for the skill."
+      - name: skill_sla_threshold_seconds
+        data_type: int
+        description: "SLA threshold in seconds for the skill."
+      - name: campaign_name
+        data_type: string
+        description: "Outbound campaign name, if applicable."
+      - name: disposition_name
+        data_type: string
+        description: '{{ doc("nice_disposition") }}'
+      - name: disposition_outcome
+        data_type: string
+        description: "System-level outcome classification."
+      - name: end_reason
+        data_type: string
+        description: "How the contact ended."
+      - name: from_address
+        data_type: string
+        description:
+          "Originating address (phone number, email, or chat handle) of the
+          contact."
+      - name: to_address
+        data_type: string
+        description:
+          "Destination address (phone number, email, or chat handle) of the
+          contact."
+      - name: caller_first_name
+        data_type: string
+        description: "First name of the caller, if available from ANI lookup."
+      - name: caller_last_name
+        data_type: string
+        description: "Last name of the caller, if available from ANI lookup."
+      - name: is_outbound
+        data_type: boolean
+        description: "True for outbound contacts."
+      - name: is_inbound
+        data_type: boolean
+        description: "True for inbound contacts (inverse of is_outbound)."
+      - name: is_abandoned
+        data_type: boolean
+        description: '{{ doc("nice_is_abandoned") }}'
+      - name: is_refused
+        data_type: boolean
+        description: "True when agent refused the offered contact."
+      - name: is_transferred
+        data_type: boolean
+        description: "True when the contact was transferred."
+      - name: is_short_abandon
+        data_type: boolean
+        description: "True for short-abandon contacts (< threshold)."
+      - name: service_level_met
+        data_type: boolean
+        description: '{{ doc("nice_service_level_met") }}'
+      - name: pre_queue_seconds
+        data_type: double
+        description: "Time in seconds before the contact entered the queue (IVR,
+          pre-routing)."
+      - name: queue_wait_seconds
+        data_type: double
+        description: '{{ doc("nice_queue_wait") }}'
+      - name: talk_seconds
+        data_type: double
+        description: "Agent-to-customer conversation duration in seconds."
+      - name: hold_seconds
+        data_type: double
+        description: "Total hold time in seconds."
+      - name: hold_count
+        data_type: int
+        description: "Number of hold events."
+      - name: acw_seconds
+        data_type: double
+        description: "After Call Work duration in seconds."
+      - name: conference_seconds
+        data_type: double
+        description: "Time in seconds spent in conference with additional parties."
+      - name: total_duration_seconds
+        data_type: double
+        description: "Total contact duration from start to finish."
+      - name: handle_time_seconds
+        data_type: double
+        description: '{{ doc("nice_handle_time") }}'
+      - name: abandon_seconds
+        data_type: double
+        description: "Wait time before abandonment. NULL if not abandoned."
+
+  - name: call_center_sentiment
+    description: >
+      Call center sentiment fact model. One row per NICE Enlighten AI-analyzed
+      interaction segment. Joins sentiment data with contact, agent, and skill
+      dimensions for contextual analysis. Exposes sentiment scores, intent
+      classification, resolution tracking, frustration detection, and silence
+      metrics. Source: stg_nice__sentiment + stg_nice__contacts +
+      stg_nice__agents + stg_nice__skills. Grain: One row per segment_id.
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: ["fact", "cube", "BIPlatform", "nice", "call_center", "sentiment"]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: contact_date
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: segment_id
+        data_type: string
+        description: "Interaction analytics segment ID (Primary Key)."
+        constraints:
+          - type: not_null
+        tests:
+          - unique:
+              config:
+                severity: error
+      - name: contact_id
+        data_type: bigint
+        description: "Linked NICE contact ID for joining to interaction data."
+      - name: contact_no
+        data_type: string
+        description: "NICE contact number."
+      - name: segment_start_at
+        data_type: timestamp
+        description: "Timestamp when the analyzed segment started."
+      - name: segment_end_at
+        data_type: timestamp
+        description: "Timestamp when the analyzed segment ended."
+      - name: segment_date
+        data_type: date
+        description: "Calendar date of the segment. Primary time dimension."
+      - name: segment_media_type
+        data_type: string
+        description: "Media type from the interaction analytics segment record."
+      - name: media_type
+        data_type: string
+        description:
+          "Resolved media type (contact media type preferred, falls back to
+          segment)."
+      - name: language
+        data_type: string
+        description: "Language of the interaction as detected by Enlighten AI."
+      - name: agent_name
+        data_type: string
+        description: "Agent who handled the contact."
+      - name: skill_name
+        data_type: string
+        description: "Skill/queue the contact was routed to."
+      - name: disposition_name
+        data_type: string
+        description: "Call disposition from the linked contact."
+      - name: contact_date
+        data_type: date
+        description: "Date of the original contact."
+      - name: sentiment_raw_score
+        data_type: double
+        description: '{{ doc("nice_sentiment_score") }}'
+      - name: sentiment_index_score
+        data_type: int
+        description: "Normalized Enlighten sentiment index (integer scale)."
+      - name: sentiment_category
+        data_type: string
+        description: '{{ doc("nice_sentiment_category") }}'
+      - name: customer_sentiment
+        data_type: string
+        description: "Overall customer channel sentiment."
+      - name: customer_begin_sentiment
+        data_type: string
+        description: "Customer sentiment at interaction start."
+      - name: customer_end_sentiment
+        data_type: string
+        description: "Customer sentiment at interaction end."
+      - name: customer_frustration
+        data_type: string
+        description: '{{ doc("nice_customer_frustration") }}'
+      - name: primary_intent
+        data_type: string
+        description: '{{ doc("nice_primary_intent") }}'
+      - name: intent_category
+        data_type: string
+        description: "Higher-level grouping of the primary intent."
+      - name: intent_topic
+        data_type: string
+        description: "Specific topic within the intent category."
+      - name: segment_outcome
+        data_type: string
+        description: "AI-determined outcome of the interaction."
+      - name: segment_action
+        data_type: string
+        description: "Action taken or recommended from the analysis."
+      - name: is_resolved
+        data_type: boolean
+        description: '{{ doc("nice_is_resolved") }}'
+      - name: category_matches
+        data_type: string
+        description: "Matched category labels from Enlighten AI auto-categorization."
+      - name: notable_silence_seconds
+        data_type: int
+        description: "Total seconds of notable silence during the segment."
+      - name: notable_silence_percentage
+        data_type: int
+        description: "Percentage of segment time that was notable silence."
+      - name: non_hold_notable_silence_seconds
+        data_type: int
+        description: "Notable silence seconds excluding hold time."
+      - name: hold_seconds
+        data_type: int
+        description: "Hold duration within the analyzed segment."
+      - name: hold_count
+        data_type: int
+        description: "Number of hold events within the segment."
+
+  - name: attribution_timeline
+    description: >
+      Enriched longitudinal attribution fact combining attribution_history and
+      attribution_movement. Adds is_truly_lost, dual-attribution, movement
+      events, cross-payor shift detection, insurance change reasons, and
+      consecutive tenure. Grain: one row per identity_id x attributed_payor x
+      as_of_month.
+    config:
+      contract:
+        enforced: true
+      tags: ["fact", "cube", "BIPlatform", "attribution", "hourly"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - identity_id
+              - attributed_payor
+              - as_of_month
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: as_of_month
+          config:
+            severity: warn
+            tags: ["elementary", "volume", "cube_contract"]
+    columns:
+      - name: golden_id
+        data_type: string
+        description: "EMPI golden record ID"
+      - name: identity_id
+        data_type: string
+        description: "{{ doc('identity_id') }}"
+      - name: entity_id
+        data_type: string
+        description: "{{ doc('entity_id') }}"
+      - name: is_ghost
+        data_type: boolean
+        description: "True when the EMPI identity has no Athena chart (payor-origin roster member)."
+      - name: is_vendorblue
+        data_type: boolean
+        description: >
+          True when this PAYOR_B H2001 attribution row's effective attributed clinic
+          TIN equals the VendorBlue TIN (204841281). Always false for non-PAYOR_B
+          payors. Point-in-time per as_of_month.
+      - name: match_status
+        data_type: string
+        description: "EMPI match state: MATCHED, ROSTER_ONLY, or approval workflow status."
+      - name: patient_id
+        data_type: bigint
+        description: "Athena Patient ID"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID"
+      - name: patient_name
+        data_type: string
+        description: "Patient full name"
+      - name: patient_date_of_birth
+        data_type: string
+        description: "Patient date of birth"
+      - name: preferred_clinic
+        data_type: string
+        description: "MDM-standardized clinic name from patient dimension"
+      - name: primary_provider_id
+        data_type: bigint
+        description:
+          "Athena PRIMARYPROVIDERID — canonical join key for the patient's
+          primary care provider."
+      - name: primary_care_provider
+        data_type: string
+        description:
+          "Primary care provider display name (resolved from providers
+          dimension via primary_provider_id)."
+      - name: attributed_payor
+        data_type: string
+        description: "Payor from roster (PAYOR_A, PAYOR_B, MEDICARE, AHA, PAYOR_C, PAYOR_DELTA)"
+      - name: payor_member_id
+        data_type: string
+        description: "Payor-assigned member ID"
+      - name: market_segment
+        data_type: string
+        description: "Market segment from payor roster"
+      - name: attribution_subtype
+        data_type: string
+        description: "Attribution subtype from the payor roster (e.g. PAYOR_B mbr_typ_cd; Medicare MSSP mbr_typ_cd such as Aged/Non-Dual)"
+      - name: as_of_month
+        data_type: date
+        description: "Roster month"
+      - name: attribution_year
+        data_type: int
+        description: "Year of the attribution month"
+      - name: year_month
+        data_type: string
+        description: "Year-month string (yyyy-MM)"
+      - name: is_current_attribution
+        data_type: boolean
+        description: "True if this is the most recent roster month for this payor"
+      - name: patient_status
+        data_type: string
+        description: "MDM computed patient status"
+      - name: is_active_patient
+        data_type: boolean
+        description: "True if patient is Active per MDM"
+      - name: match_type
+        data_type: string
+        description: "EMPI match type"
+      - name: file_source
+        data_type: string
+        description: "Source roster file"
+      - name: attributed_provider_id
+        data_type: decimal(38,0)
+        description: >
+          Resolved Athena provider_id from MDM provider master for the
+          payor-attributed PCP (sourced from attribution_history via
+          int_attribution_provider_match). NULL when no MDM match (typically
+          external/referring providers).
+      - name: attributed_provider_name
+        data_type: string
+        description: >
+          Display name of the attributed provider — canonical MDM name when
+          matched (e.g. "Leah Carver"), otherwise the raw payor-supplied string
+          verbatim (e.g. "VELIN, LAUREN A") so external/referring providers stay
+          visible.
+      - name: attributed_provider_npi
+        data_type: string
+        description: >
+          NPI of the attributed provider — canonical MDM NPI when matched,
+          otherwise the raw payor-supplied NPI.
+      - name: attributed_provider_match_method
+        data_type: string
+        description: >
+          How the provider was resolved: 'npi', 'name', 'last_name', or
+          'unmatched'. NULL for Medicare-FFS rows.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["npi", "name", "last_name", "unmatched"]
+              config:
+                severity: warn
+      - name: movement_event
+        data_type: string
+        description: "GAINED, RETAINED, or LOST from month-over-month comparison"
+      - name: shifted_from_payor
+        data_type: string
+        description: "Payor the patient shifted from (NULL if not a shift)"
+      - name: shifted_to_payor
+        data_type: string
+        description: "Payor the patient shifted to (NULL if not a shift)"
+      - name: is_payor_shift
+        data_type: boolean
+        description:
+          "True if patient was LOST from one payor and GAINED at another in
+          the same month"
+      - name: is_truly_lost
+        data_type: boolean
+        description:
+          "True if patient was on roster but not on the latest month for this
+          payor"
+      - name: payor_count_in_month
+        data_type: bigint
+        description: "Number of payors attributing this patient in the same month"
+      - name: is_dual_attributed
+        data_type: boolean
+        description: "True if patient appears on 2+ payor rosters in the same month"
+      - name: concurrent_payors
+        data_type: string
+        description: "Comma-separated list of concurrent payors in the same month"
+      - name: consecutive_months
+        data_type: int
+        description: "Running count of consecutive months on this payor"
+      - name: prior_payor
+        data_type: string
+        description: "Previous payor from prior month (for shift detection)"
+      - name: insurance_change_reason
+        data_type: string
+        description:
+          "Categorized reason: NEW_ATTRIBUTION, PAYOR_SWITCH, PAYOR_DROPPED,
+          FULLY_LOST, STABLE"
+      - name: data_freshness
+        data_type: string
+        description: "CURRENT if within 60 days, STALE otherwise"
+      - name: source_updated_at
+        data_type: timestamp
+        description: "CDF watermark for downstream ServingDB TRIGGERED sync. Derived from upstream attribution_history.source_updated_at. Required for incremental merge mode; do not remove."
+
+  - name: attribution_operations
+    description: >
+      Effort vs success attribution model. Marries roster/EMPI attribution data
+      with Salesforce operational effort to track AWV, MDDO, off-cadence work
+      and measure effort-to-outcome conversion. Includes operational segments
+      and effort/success scoring. Grain: one row per patient_id (current
+      snapshot). This operational patient fact intentionally requires a non-null
+      Athena patient_id, so roster-only identities retained by attribution_history
+      are excluded here while remaining available to relationship-grain
+      attribution consumers.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+      tags: ["fact", "cube", "BIPlatform", "attribution", "hourly"]
+    tests:
+      # MERGE-never-deletes drift: patient_ids in target that no longer exist in
+      # int_attribution_global. 92 phantoms cleaned 2026-04-28 (and 118 in the Fabric
+      # wrapper view). Cascades from drift in upstream patient/EMPI sources.
+      - no_filter_drift:
+          arguments:
+            key_column: patient_id
+            source_model: int_attribution_global
+          config:
+            severity: warn
+            tags: ["elementary", "filter_drift", "data_quality"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: bigint
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - relationships:
+              arguments:
+                to: ref('patients')
+                field: patient_id
+              config:
+                severity: warn
+
+      - name: golden_id
+        data_type: string
+        description: "EMPI golden record ID"
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID"
+      - name: patient_name
+        data_type: string
+        description: "Patient full name"
+      - name: patient_date_of_birth
+        data_type: date
+        description: "Patient date of birth"
+      - name: patient_status
+        data_type: string
+        description: "MDM computed patient status"
+      - name: preferred_clinic
+        data_type: string
+        description: "Patient preferred clinic"
+      - name: primary_provider_id
+        data_type: bigint
+        description:
+          "Athena PRIMARYPROVIDERID — canonical join key for the patient's
+          primary care provider."
+      - name: primary_care_provider
+        data_type: string
+        description:
+          "Primary care provider display name (resolved from providers
+          dimension via primary_provider_id)."
+      - name: mdm_payor_category
+        data_type: string
+        description: "MDM canonical payor category"
+      - name: mdm_payor_brand
+        data_type: string
+        description: "Primary payor brand from MDM"
+      - name: is_empi_attributed
+        data_type: boolean
+        description: "True if patient appears on any current EMPI-matched payor roster"
+      - name: primary_attributed_payor
+        data_type: string
+        description: "Highest-priority attributed payor"
+      - name: secondary_attributed_payor
+        data_type: string
+        description: "Second-highest-priority attributed payor (multi-slot attribution), sourced from int_attribution_global."
+      - name: attribution_slot_source
+        data_type: string
+        description: "Source of the attribution slot assignment (e.g. roster/claims vs voluntary), sourced from int_attribution_global."
+      - name: primary_attribution_subtype
+        data_type: string
+        description: "Attribution subtype for primary payor"
+      - name: is_voluntary
+        data_type: boolean
+        description: "True if primary attribution is voluntary alignment only"
+      - name: is_net_attributed
+        data_type: boolean
+        description: "True if attributed minus Medicare voluntary"
+      - name: population_segment
+        data_type: string
+        description: "Attributed - Voluntary, Attributed - Claims/Roster, or Unattributed"
+      - name: roster_attributed_payor
+        data_type: string
+        description: "Current payor per EMPI roster (NULL if lost)"
+      - name: roster_attribution_month
+        data_type: date
+        description: "Latest month on roster"
+      - name: is_currently_on_roster
+        data_type: boolean
+        description: "True if on the latest roster file"
+      - name: roster_movement_event
+        data_type: string
+        description: "Latest movement event: GAINED, RETAINED, or LOST"
+      - name: is_payor_shift
+        data_type: boolean
+        description: "True if latest event was a cross-payor shift"
+      - name: is_truly_lost
+        data_type: boolean
+        description: "True if patient was on a roster but is now off all current rosters"
+      - name: is_dual_attributed
+        data_type: boolean
+        description: "True if on 2+ rosters simultaneously"
+      - name: all_roster_payors
+        data_type: string
+        description: "Comma-separated concurrent payors"
+      - name: sf_attribution_status
+        data_type: string
+        description: "Salesforce Attribution status"
+      - name: sf_attribution_stage
+        data_type: string
+        description: "Salesforce attribution stage"
+      - name: sf_workflow_type
+        data_type: string
+        description: "Derived workflow type from SF"
+      - name: sf_payor_type
+        data_type: string
+        description: "Salesforce payor type"
+      - name: awv_status
+        data_type: string
+        description: "AWV visit status from SF"
+      - name: awv_is_actionable
+        data_type: boolean
+        description: "True if AWV eligible but not yet scheduled"
+      - name: awv_is_scheduled
+        data_type: boolean
+        description: "True if AWV is scheduled"
+      - name: awv_is_completed
+        data_type: boolean
+        description: "True if AWV is completed"
+      - name: awv_last_activity
+        data_type: timestamp
+        description: "Last AWV activity timestamp"
+      - name: awv_outcome
+        data_type: string
+        description:
+          "AWV outcome: CONVERTED, SCHEDULED_PENDING, ELIGIBLE_NO_ACTION,
+          NOT_REQUIRED"
+      - name: mddo_status
+        data_type: string
+        description: "MDDO visit status from SF"
+      - name: mddo_is_actionable
+        data_type: boolean
+        description: "True if MDDO eligible but not yet scheduled"
+      - name: mddo_is_scheduled
+        data_type: boolean
+        description: "True if MDDO is scheduled"
+      - name: mddo_is_completed
+        data_type: boolean
+        description: "True if MDDO is completed"
+      - name: mddo_last_activity
+        data_type: timestamp
+        description: "Last MDDO activity timestamp"
+      - name: mddo_outcome
+        data_type: string
+        description:
+          "MDDO outcome: CONVERTED, SCHEDULED_PENDING, ELIGIBLE_NO_ACTION,
+          NOT_REQUIRED"
+      - name: off_cadence_active
+        data_type: boolean
+        description: "True if patient is off cadence"
+      - name: off_cadence_status
+        data_type: string
+        description: "Off cadence status"
+      - name: is_6_months_unengaged
+        data_type: boolean
+        description: "True if no visit in 6 months"
+      - name: is_12_months_unengaged
+        data_type: boolean
+        description: "True if no visit in 12 months"
+      - name: last_completed_visit_date
+        data_type: timestamp
+        description: "Date of last completed visit"
+      - name: days_since_last_visit
+        data_type: int
+        description: "Days since last completed visit"
+      - name: completed_appointment_count
+        data_type: double
+        description: "Total completed appointments"
+      - name: cancelled_appointment_count
+        data_type: double
+        description: "Total cancelled appointments"
+      - name: data_quality_score
+        data_type: int
+        description: "Data quality score 0-100"
+      - name: effort_score
+        data_type: int
+        description:
+          "0-100 score measuring how much operational work has been done for
+          this patient"
+      - name: success_score
+        data_type: int
+        description:
+          "0-100 score measuring outcome success (AWV/MDDO completed, on
+          roster, voluntary confirmed)"
+      - name: operational_segment
+        data_type: string
+        description: >
+          Derived patient categorization: Attributed - Engaged, Attributed - At
+          Risk, Attributed - Needs Work, Lost - Despite Effort, Lost - No
+          Effort, Gaining - In Progress, Unattributed, Attributed - Stable.
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp for incremental merge and freshness (from
+          mv_attribution_self_service)"

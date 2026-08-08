@@ -1,0 +1,96 @@
+version: 2
+
+metrics:
+  # ---------------------------------------------------------------------------
+  # Volume Metrics
+  # ---------------------------------------------------------------------------
+  - name: awv_cancellation_rate
+    description: "AWV cancellation rate"
+    type: derived
+    label: "AWV Cancellation Rate %"
+    expr: "total_awv_cancelled * 100.0 / nullif(total_awv_eligible, 0)"
+    input_metrics:
+      - name: total_awv_cancelled
+      - name: total_awv_eligible
+
+  # ---------------------------------------------------------------------------
+  # Goal Metrics
+  # ---------------------------------------------------------------------------
+  - name: awv_completed_cumulative
+    description: "Cumulative AWV completions year-to-date (running total)"
+    type: cumulative
+    label: "AWV Completed (Cumulative)"
+    input_metric: total_awv_completed
+    grain_to_date: year
+
+  - name: awv_completed_vs_prior_month
+    description: "AWV completed compared to same period last month (MoM change)"
+    type: derived
+    label: "AWV Completed MoM Change"
+    expr: "total_awv_completed - total_awv_completed_prior_month"
+    input_metrics:
+      - name: total_awv_completed
+      - name: total_awv_completed
+        offset_window: 1 month
+        alias: total_awv_completed_prior_month
+
+  - name: awv_completed_yoy_change
+    description: "AWV completed compared to same period last year (YoY change)"
+    type: derived
+    label: "AWV Completed YoY Change"
+    expr: "total_awv_completed - total_awv_completed_prior_year"
+    input_metrics:
+      - name: total_awv_completed
+      - name: total_awv_completed
+        offset_window: 1 year
+        alias: total_awv_completed_prior_year
+
+  - name: awv_completion_rate
+    description: "AWV completion percentage (completed / eligible)"
+    type: derived
+    label: "AWV Completion Rate %"
+    expr: "total_awv_completed * 100.0 / nullif(total_awv_eligible, 0)"
+    input_metrics:
+      - name: total_awv_completed
+      - name: total_awv_eligible
+
+  - name: awv_completion_rate_vs_prior_month
+    description: "AWV completion rate change month-over-month"
+    type: derived
+    label: "AWV Rate MoM Change %"
+    expr: "awv_completion_rate - awv_completion_rate_prior_month"
+    input_metrics:
+      - name: awv_completion_rate
+      - name: awv_completion_rate
+        offset_window: 1 month
+        alias: awv_completion_rate_prior_month
+
+  - name: awv_projected_completion_rate
+    description: "Projected AWV completion rate including scheduled"
+    type: derived
+    label: "Projected AWV Completion %"
+    expr: "total_awv_projected * 100.0 / nullif(total_awv_eligible, 0)"
+    input_metrics:
+      - name: total_awv_projected
+      - name: total_awv_eligible
+
+  - name: awv_scheduled_cumulative
+    description: "Cumulative AWV scheduled year-to-date (running total)"
+    type: cumulative
+    label: "AWV Scheduled (Cumulative)"
+    input_metric: total_awv_scheduled
+    grain_to_date: year
+
+  # ---------------------------------------------------------------------------
+  # Period-over-Period Comparison Metrics
+  # ---------------------------------------------------------------------------
+  - name: awv_yoy_growth_rate
+    description: "AWV year-over-year growth percentage"
+    type: derived
+    label: "AWV YoY Growth %"
+    expr: "(total_awv_completed - total_awv_completed_prior_year) * 100.0 / nullif(total_awv_completed_prior_year, 0)"
+    input_metrics:
+      - name: total_awv_completed
+      - name: total_awv_completed
+        offset_window: 1 year
+        alias: total_awv_completed_prior_year

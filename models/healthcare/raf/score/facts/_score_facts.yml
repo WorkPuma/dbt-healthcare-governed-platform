@@ -1,0 +1,322 @@
+version: 2
+
+models:
+  - name: fct_raf__score_components
+    description: >
+      Per-member, per-year RAF score component breakdown.
+      Demographic + disease + interaction + count = raw RAF.
+      Replaces MONTHLY_RAF_ENHANCED. Keyed on the EMPI entity_id so roster-only
+      ghosts (no Athena patient_id) receive a demographic-only score.
+      Note: output coded_year is aliased from attribution payment_year
+      (payment_year AS coded_year); rename out of scope. Disease inputs join on
+      diagnosis_coded_year from ref_raf__data_collection_periods.
+    columns:
+      - name: entity_id
+        description: Stable EMPI member key (patient_id as string, else identity_id).
+        tests: [not_null]
+      - name: patient_id
+        description: Athena patient id; NULL for roster-only ghosts.
+      - name: is_ghost
+        description: True for roster-only members scored demographic-only.
+        tests: [not_null]
+      - name: coded_year
+        description: >
+          Alias of attribution payment_year on the output grain (rename out of
+          scope). Payment/settlement year for the member-year score row.
+        tests: [not_null]
+      - name: raw_raf_score
+        description: "Raw (pre-normalization) RAF: demographic + disease coefficients."
+        tests: [not_null]
+      - name: model_version
+        description: >
+          CMS-HCC model version that scored this member-year (Phase 2 stamp,
+          propagated from int_raf__scored_hccs; demographic-only members default
+          to the current version 'V28').
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['V28']
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - entity_id
+              - coded_year
+      - elementary.volume_anomalies:
+          config:
+            tags: ["elementary", "raf", "volume"]
+            severity: warn
+            description: "Detect run-over-run row-count anomalies in scored components (member-year drop/spike)"
+      - elementary.dimension_anomalies:
+          arguments:
+            dimensions: ["eligibility_segment"]
+          config:
+            tags: ["elementary", "raf", "distribution"]
+            severity: warn
+            description: "Detect shifts in the eligibility-segment mix (segmentation regression)"
+      - elementary.column_anomalies:
+          arguments:
+            column_name: raw_raf_score
+          config:
+            tags: ["elementary", "raf", "distribution"]
+            severity: warn
+            description: "Detect distribution anomalies in raw RAF (build-up engine drift)"
+
+  - name: fct_raf__patient_summary
+    description: >
+      Per-patient payment-ready RAF with normalization and coding intensity.
+      Includes demographic-only members. Replaces RAF_MONTHLY_* and
+      RAF_PATIENT_MONTHLY_TOTAL.
+
+      Materialization (2026-06): full-rebuild `table` (changed from
+      incremental merge) to guarantee determinism and avoid retaining stale
+      patients ("graveyard") after the MA scope gate + inception-floor changes
+      upstream. Population is the Medicare Advantage panel only (see
+      dim_raf__attribution).
+
+      Scoreable-year gate (2026-06): the population is restricted to payment
+      years flagged is_scoreable=true in the governed
+      ref_raf__data_collection_periods seed. Under the prospective CMS-HCC model
+      a payment year is scored from the PRIOR calendar year's diagnoses
+      (PY2026 <- CY2025). Because EMR data begins Oct 2024, PY2026 is the first
+      payment year with a complete prior-year diagnosis basis; PY2024/PY2025
+      previously appeared here only as demographic-only shells (attribution spanned
+      calendar years the scoring engine never ran) and are now excluded at source.
+      Each row carries both payment_year and the diagnosis_coded_year that produced
+      its score, making the payment-vs-diagnosis-year distinction explicit.
+
+      EMPI keying (2026-06): keyed on entity_id (Athena patient_id for matched
+      members, identity_id for roster-only ghosts). Roster-only ghosts appear here
+      as demographic-only scores (is_ghost = true, is_demographic_only = true).
+    columns:
+      - name: entity_id
+        description: Stable EMPI member key (patient_id as string, else identity_id).
+        tests: [not_null]
+      - name: patient_id
+        description: Athena patient id; NULL for roster-only ghosts.
+      - name: is_ghost
+        description: True for roster-only members scored demographic-only.
+        tests: [not_null]
+      - name: payment_year
+        description: "CMS payment/settlement year. Gated to is_scoreable years in ref_raf__data_collection_periods (PY2026+)."
+        tests: [not_null]
+      - name: diagnosis_coded_year
+        description: "Date-of-service / diagnosis year whose coded conditions produced this payment year's score (prospective: payment_year - 1 under CMS midyear/final, e.g. PY2026 <- CY2025). Sourced from ref_raf__data_collection_periods."
+        tests: [not_null]
+      - name: raw_raf_score
+        description: "Raw (pre-normalization) RAF: demographic + disease coefficients."
+        tests: [not_null]
+      - name: payment_raf_score
+        description: "Final adjusted RAF after normalization and coding intensity"
+      - name: is_mssp
+        description: >
+          True when the patient is MSSP/ACO-attributed in the most recent
+          attribution snapshot (max attr_report_period in empi_medicare_matches).
+          MSSP populations skip the 5.90% MA coding-intensity adjustment, so this
+          flag drives payment_raf_score. Behavior change (2026-06): previously
+          pinned to a hardcoded attr_report_period; now self-advances to the
+          latest snapshot, expanding the MSSP cohort from a stale ~20 to ~868.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - entity_id
+              - payment_year
+      - elementary.volume_anomalies:
+          config:
+            tags: ["elementary", "raf", "volume"]
+            severity: warn
+            description: "Detect run-over-run row-count anomalies in the payment-RAF fact (attribution/scoring drop)"
+      - elementary.column_anomalies:
+          arguments:
+            column_name: payment_raf_score
+          config:
+            tags: ["elementary", "raf", "distribution"]
+            severity: warn
+            description: "Detect distribution anomalies in payment RAF (normalization/coding-intensity drift)"
+
+  - name: fct_raf__monthly_snapshots
+    description: >
+      Monthly point-in-time RAF snapshots keyed by payment_year x year_month
+      (disease inputs join on diagnosis_coded_year via
+      ref_raf__data_collection_periods). Single model replaces per-year
+      snapshot tables from Snowflake.
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: year_month
+        description: Calendar year-month of the monthly RAF snapshot.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - year_month
+
+  - name: fct_raf__monthly_score_snapshots
+    description: >
+      Authoritative immutable member-level monthly RAF history implementing the
+      RAF review date-span matrix (ref_raf__monthly_run_windows). One row per
+      entity_id x account_period x score_lens x run_date; each monthly refresh
+      after the 11th appends a new run_date without overwriting prior snapshots
+      (incremental merge on the four-column key).
+
+      Score lenses:
+        INTERNAL_BUILDUP - Athena-coded diagnoses, DOS Jan 1 of the score
+          (payment) year through the account-period month-end (calendar-year
+          build-up; coded_year = payment_year).
+        ALL_IN_BUILDUP   - internal diagnoses UNION MAO-004 CMS-accepted
+          diagnoses as of the run's MAO receipt cutoff.
+        PAYMENT          - internal diagnoses UNION accepted MAO-004 as of the
+          max receipt date, across the full prior (diagnosis-coded) year
+          (coded_year = diagnosis_coded_year); enrollment Jan 1 of the payment
+          year; refreshed monthly during the payment year.
+
+      DOS cutoff is the configured month-end (no future-HCC leakage). Internal
+      and accepted MAO-004 HCCs are combined at pre-hierarchy grain per window;
+      CMS hierarchy and interactions are recalculated from that bounded set.
+      Disease/count use post-hierarchy HCCs and interactions use pre-hierarchy
+      category presence. New Enrollees and roster-only ghosts are scored
+      demographic-only; MSSP members skip MA coding intensity.
+
+      Run targeting: pass raf_snapshot_account_period to score a specific month
+      for all three lenses (used by the monthly Prefect run); otherwise the
+      model scores the most recent completed account period in the payment year
+      containing run_date. raf_snapshot_run_date stamps the snapshot (default
+      current_date).
+
+      Population: the Medicare-Advantage panel (dim_raf__attribution) joined
+      at the exact account period (year_month = account_period) so each monthly
+      snapshot reflects the active panel, provider, payor, and MDM predicates
+      for that month, gated to scoreable payment years.
+    columns:
+      - name: monthly_score_snapshot_id
+        description: "Surrogate PK - MD5(entity_id|account_period|score_lens|run_date)."
+        tests: [not_null, unique]
+      - name: entity_id
+        description: Stable EMPI member key (Athena patient_id or identity_id for ghosts).
+        tests: [not_null]
+      - name: payment_year
+        description: CMS payment/settlement year for this row.
+        tests: [not_null]
+      - name: coded_year
+        description: Diagnosis coding / DOS year for scoring (lens-specific when from run windows).
+        tests: [not_null]
+      - name: score_lens
+        description: "Score lens: INTERNAL_BUILDUP, ALL_IN_BUILDUP, or PAYMENT."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['INTERNAL_BUILDUP', 'ALL_IN_BUILDUP', 'PAYMENT']
+      - name: account_period
+        description: "First-of-month account period the snapshot is keyed on."
+        tests: [not_null]
+      - name: dos_begin
+        description: Start of the date-of-service diagnosis window for this run.
+        tests: [not_null]
+      - name: dos_end
+        description: "DOS cutoff = account-period month-end (buildup) or Dec 31 of coded year (payment)."
+        tests: [not_null]
+      - name: enrollment_date
+        description: Enrollment as-of date used for demographic and segment attributes.
+        tests: [not_null]
+      - name: run_date
+        description: "Date the snapshot was produced; part of the immutable merge key."
+        tests: [not_null]
+      - name: raw_raf_score
+        description: "Raw (pre-normalization) RAF: demographic + disease coefficients."
+        tests: [not_null]
+      - name: payment_raf_score
+        description: "Normalized, coding-intensity-adjusted RAF (MSSP skips coding intensity)."
+      - name: is_mssp
+        description: True when the patient is MSSP/ACO-attributed in the latest snapshot.
+        tests: [not_null]
+      - name: is_demographic_only
+        description: True when the member has demographic RAF only (no disease HCCs).
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - entity_id
+              - account_period
+              - score_lens
+              - run_date
+
+  - name: ref_raf__year_locks
+    description: >
+      Reference: RAF Year Lock Control Table. Controls which payment years
+      are open for scoring vs locked (frozen for CMS submission or archiving).
+      Grain: one row per payment_year.
+    columns:
+      - name: payment_year
+        description: "Payment year (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+  - name: fct_raf__buildup_monthly
+    description: >
+      Month-over-month RAF buildup per member within a payment year (Capability #2,
+      Monthly Build-Up Report): monthly raw/payment RAF deltas, new HCCs, cumulative
+      gain, and buildup classification, derived from fct_raf__monthly_snapshots.
+      Grain: one row per patient_id x payment_year x month_number.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - payment_year
+              - month_number
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: payment_year
+        description: CMS payment/settlement year for this row.
+        tests: [not_null]
+      - name: month_number
+        description: Calendar month number (1–12) within the payment/buildup year.
+        tests: [not_null]
+      - name: buildup_status
+        description: "Month-over-month movement of raw RAF: BASELINE / INCREASED / UNCHANGED / DECREASED."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['BASELINE', 'INCREASED', 'UNCHANGED', 'DECREASED']
+
+  - name: fct_raf__year_progression
+    description: >
+      Year-over-year RAF progression per member (Capability #4): prior-year scores,
+      YoY deltas/percent change, segment-change flag, and trend classification across
+      payment years, derived from fct_raf__patient_summary.
+      Grain: one row per patient_id x coded_year.
+      Note: coded_year is an alias of payment_year (SQL: payment_year AS coded_year);
+      column rename is out of scope — treat as payment/settlement year on this model.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - coded_year
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: coded_year
+        description: >
+          Alias of payment_year from fct_raf__patient_summary (rename out of scope).
+          Payment/settlement year for the YoY comparison, not diagnosis DOS year.
+        tests: [not_null]
+      - name: yoy_trend
+        description: "Year-over-year movement of raw RAF: NEW_MEMBER / INCREASED / UNCHANGED / DECREASED."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['NEW_MEMBER', 'INCREASED', 'UNCHANGED', 'DECREASED']

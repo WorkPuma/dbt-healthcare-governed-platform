@@ -1,0 +1,54 @@
+version: 2
+
+seeds:
+  - name: ref_incremental_model_contracts
+    description: >
+      One reviewed row per first-party healthcare_analytics incremental model.
+      Static columns (strategy, declared_unique_key, matched_condition,
+      incremental_predicates, parents, sources) are generated from the
+      current manifest. Evidence columns (documented_grain,
+      authoritative_watermark_expr, lookback, delete_mode,
+      validation_category, evidence_status) are populated from production
+      Databricks validation and must not be guessed. Drives the
+      test_incremental_contract_coverage and
+      test_incremental_unique_key_documented audit tests.
+    config:
+      schema: audit
+      tags: ["audit", "incremental", "meta_guard"]
+    columns:
+      - name: model_name
+        description: "dbt model name"
+        tests:
+          - not_null
+          - unique
+      - name: file_path
+        tests:
+          - not_null
+      - name: strategy
+        description: "Resolved incremental_strategy (merge, append, replace_where, microbatch)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["merge", "append", "replace_where", "microbatch"]
+      - name: declared_unique_key
+        description: "unique_key declared in the model config; empty is a defect for incremental models"
+        tests:
+          - not_null
+      - name: evidence_status
+        description: >
+          Lifecycle of production evidence collection for this model.
+          pending: not yet reviewed. pk_validated: production PK integrity
+          confirmed (no nulls, no duplicates). validated: PK validated AND
+          documented_grain + authoritative_watermark_expr populated.
+          defect_found: production PK integrity defect detected.
+          blocked_upstream_empty: cannot validate because an upstream
+          parent is empty in prod. empty_in_prod: model itself empty in prod.
+          not_in_prod: relation not found in prod catalog/schema.
+          registry_backfill: row added to close incremental-contract coverage
+          gap; PK/evidence review still pending.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["pending", "pk_validated", "validated", "defect_found", "blocked_upstream_empty", "empty_in_prod", "not_in_prod", "not_applicable", "registry_backfill"]

@@ -1,0 +1,208 @@
+version: 2
+
+seeds:
+  - name: metric_definitions
+    description: "Registry of all V3 metric names, their source mart, aggregation type, and column references. Drives the generic metric() BFF function in ServingDB Postgres."
+    config:
+      schema: marts_bi_v3
+      meta:
+        # Composite PK: `name` alone is not unique — `nps_score` is defined for
+        # both mart_patient_experience and mart_membership_kpis_monthly.
+        # (Row count grows with the registry — do not hardcode it here; the
+        # compound-uniqueness test below is the actual guarantee.)
+        # dbt-fusion rejects config.unique_key on seeds, so we carry the PK
+        # through meta.servingdb_unique_key for servingdb_sync.py to consume.
+        servingdb_unique_key: ["name", "source_mart"]
+      column_types:
+        name: string
+        source_mart: string
+        date_column: string
+        agg: string
+        sum_column: string
+        rate_num: string
+        rate_denom: string
+        rate_scale: bigint
+        label: string
+        description: string
+    # Composite-PK + not_null tests added 2026-05-20 after the /clinics outage:
+    # ServingDB Synced Tables enforces the declared PK as a Postgres PRIMARY KEY,
+    # so any null in (name, source_mart) would crash the sync pipeline into
+    # SYNCED_TABLE_OFFLINE_FAILED with no auto-recovery. dbt-databricks doesn't
+    # honor column constraints on seeds, so `not_null` data tests are the only
+    # mechanism that fails dbt loudly before bad seed data reaches ServingDB.
+    columns:
+      - name: name
+        description: "Metric short name; part of composite PK with source_mart."
+        tests:
+          - not_null
+      - name: source_mart
+        description: "Owning mart (e.g. mart_patient_experience); part of composite PK with name."
+        tests:
+          - not_null
+      - name: date_column
+        description: >
+          Date/timestamp column on the source mart used for time filtering and
+          bucketing. Empty = timeless metric (current-state snapshot; no time
+          axis). For point-in-time metrics this is the as-of grain column
+          (e.g. status_month / period_start).
+      - name: agg
+        description: >
+          Aggregation the metric() runtime applies: count_distinct, sum, avg,
+          latest (most recent period value), rate_distinct or rate_latest
+          (numerator/denominator composition at query time — never averaged
+          across periods).
+      - name: sum_column
+        description: >
+          Column aggregated for simple metrics. For count_distinct metrics
+          this is typically a scope column (NULL-when-out-of-scope patient/
+          account id, e.g. active_pid) so the distinct count only includes
+          in-scope entities.
+      - name: rate_num
+        description: "Numerator column for rate_distinct / rate_latest metrics. Empty for simple metrics."
+      - name: rate_denom
+        description: "Denominator column for rate_distinct / rate_latest metrics. Empty for simple metrics."
+      - name: rate_scale
+        description: "Multiplier applied to rates: 100 = percentage, 1 = raw ratio / dollar units."
+      - name: label
+        description: "Human-readable metric label shown in the BIPlatform UI (chart titles, KPI cards)."
+      - name: description
+        description: >
+          Business definition of the metric — surfaced via pg_graphql
+          introspection to the BIPlatform BFF and used for AI spec grounding. Must
+          state the population, any gates (e.g. Active Patient subset), and
+          the time window when not obvious.
+    tests:
+      # Composite-PK uniqueness — switched 2026-05-20 from
+      # dbt_utils.unique_combination_of_columns (silently no-op'd because
+      # dbt_utils is not in packages.yml) to the dbt_expectations equivalent
+      # which IS installed (see packages.yml). Same semantics: every
+      # (name, source_mart) tuple must be unique. Project default severity
+      # is `error` for marts_bi_v3 tests, so a duplicate fails the build
+      # before ServingDB Synced Tables crashes on the PK constraint.
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["name", "source_mart"]
+
+  - name: metric_dimensions
+    description: "Whitelist of filter dimensions allowed per metric name. Controls what GROUP BY / WHERE dimensions are available in the BFF GraphQL layer."
+    config:
+      schema: marts_bi_v3
+      meta:
+        # Composite PK (metric_name, dimension). Row count grows with the
+        # registry — the compound-uniqueness test below is the guarantee.
+        servingdb_unique_key: ["metric_name", "dimension"]
+      column_types:
+        metric_name: string
+        dimension: string
+        label: string
+    # Composite-PK + not_null tests — same rationale as metric_definitions above.
+    columns:
+      - name: metric_name
+        description: "Metric name (matches metric_definitions.name); part of composite PK with dimension."
+        tests:
+          - not_null
+      - name: dimension
+        description: "Whitelisted filter/group-by column name; part of composite PK with metric_name."
+        tests:
+          - not_null
+      - name: label
+        description: "Human-readable dimension label for the filter bar and group-by selector in the BIPlatform UI."
+    tests:
+      # See metric_definitions above for the dbt_utils → dbt_expectations
+      # swap rationale.
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["metric_name", "dimension"]
+
+  - name: mart_relationships
+    description: >
+      Curated, safe join edges between marts_bi_v3 marts. Consumed by the
+      BIPlatform self-service report builder (GET /api/bi/v3/catalog) for
+      drill-through navigation and cross-filter memberships — NOT a runtime join
+      engine. The builder binds every report block to exactly one mart, so
+      a billion-row fan-out cannot be authored; these edges only describe
+      how marts relate so the UI can offer "open this patient" style links.
+
+      Invariants (the curation contract; enforced by the tests below):
+        - Every edge is many_to_one or one_to_one. `to_column` MUST be the
+          full grain (a unique key) of `to_mart` so the edge can never fan
+          out. many_to_many is forbidden.
+        - The edge set must be acyclic (see
+          tests/marts_bi_v3/assert_mart_relationships_acyclic.sql) so a
+          future single-hop join feature cannot loop.
+        - Single hop only. Anything deeper is a new mart in dbt.
+    config:
+      schema: marts_bi_v3
+      meta:
+        servingdb_unique_key: ["from_mart", "from_column", "to_mart"]
+      column_types:
+        from_mart: string
+        from_column: string
+        to_mart: string
+        to_column: string
+        cardinality: string
+        label: string
+    columns:
+      - name: from_mart
+        description: "Source mart (the 'many' side); part of composite PK."
+        tests:
+          - not_null
+      - name: from_column
+        description: "Join column on from_mart; part of composite PK."
+        tests:
+          - not_null
+      - name: to_mart
+        description: "Target mart (the 'one' side); part of composite PK."
+        tests:
+          - not_null
+      - name: to_column
+        description: "Join column on to_mart. Must be the full grain (unique key) of to_mart."
+        tests:
+          - not_null
+      - name: cardinality
+        description: "Edge cardinality. Only safe (non-fan-out) directions are allowed."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["many_to_one", "one_to_one"]
+    tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["from_mart", "from_column", "to_mart"]
+
+  - name: ref_mart_grains
+    description: >
+      Canonical grain registry for all marts_bi_v3 mart models. Drives
+      tests/marts_bi_v3/test_mart_grain_uniqueness.sql — each row declares the
+      natural or surrogate key columns that must be unique per model.
+    config:
+      schema: marts_bi_v3
+      column_types:
+        model_name: string
+        grain_col_1: string
+        grain_col_2: string
+        grain_col_3: string
+        grain_col_4: string
+    columns:
+      - name: model_name
+        description: "dbt model name (mart_*)."
+        tests: [not_null, unique]
+      - name: grain_col_1
+        description: "First grain column (required)."
+        tests: [not_null]
+
+  - name: engagement_score_params
+    description: >
+      Tunable parameters for Patient Engagement Score (k, lookbacks, unengaged
+      thresholds, initiator multipliers). Bump score_version when weights change.
+    config:
+      schema: marts_bi_v3
+      column_types:
+        param_key: string
+        param_value: string
+        notes: string
+    columns:
+      - name: param_key
+        tests: [unique, not_null]
+

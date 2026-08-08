@@ -1,0 +1,2 @@
+hcc_code,edit_type,required_sex,min_age,max_age,action,cms_source,notes
+111,SEX,M,,,DROP,V28115*.TXT CC sex split,"Hemophilia, Male (D66/D67). CMS-HCC V28 credits HCC111 only for male enrollees; for non-male enrollees the diagnosis is ignored (no remap to HCC112, which carries its own ICD set)."

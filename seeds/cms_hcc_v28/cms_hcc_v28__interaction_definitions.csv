@@ -1,0 +1,12 @@
+interaction_name,category_1,category_2,model_segments,cms_label
+DIABETES_HF,DIABETES_V28,HF_V28,CNA;CND;CFA;CFD;CPA;CPD;INS,Diabetes*Heart Failure
+HF_CHR_LUNG,HF_V28,CHR_LUNG_V28,CNA;CND;CFA;CFD;CPA;CPD;INS,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,HF_V28,KIDNEY_V28,CNA;CND;CFA;CFD;CPA;CPD;INS,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CHR_LUNG_V28,CARD_RESP_FAIL,CNA;CND;CFA;CFD;CPA;CPD;INS,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,HF_V28,HCC238,CNA;CND;CFA;CFD;CPA;CPD,Heart Failure*Specified Heart Arrhythmias
+gSubUseDisorder_gPsych,gSubUseDisorder_V28,gPsychiatric_V28,CND;CFD;CPD,Substance Use Disorder*Psychiatric
+DISABLED_CANCER,DISABL,CANCER_V28,INS,Disabled*Cancer
+DISABLED_NEURO,DISABL,NEURO_V28,INS,Disabled*Neurological
+DISABLED_HF,DISABL,HF_V28,INS,Disabled*Heart Failure
+DISABLED_CHR_LUNG,DISABL,CHR_LUNG_V28,INS,Disabled*Chronic Lung Disorder
+DISABLED_ULCER,DISABL,ULCER_V28,INS,Disabled*Skin Ulcer

@@ -1,0 +1,51 @@
+adjustment_reason_code,description
+00,Prospective Payment Components
+01,Notification of Death of Beneficiary
+02,Retroactive Enrollment
+03,Retroactive Disenrollment
+04,Correction to Enrollment Date
+05,Correction to Disenrollment Date
+06,Correction to Part A Entitlement
+07,Retroactive Hospice Status
+08,Retroactive ESRD Status
+09,Retroactive Institutional Status
+10,Retroactive Medicaid Status
+11,Retroactive Change to State County Code
+12,Date of Death Correction 13 Date of Birth Correction
+14,Correction to Sex Code
+15,Obsolete
+16,Obsolete
+17,For APPS use only
+18,Part C Rate Change
+19,Correction to Part B Entitlement
+20,Retroactive Working Aged Status
+21,Retroactive NHC Status
+22,Disenrolled Due to Prior ESRD
+23,Demo Factor Adjustment
+24,Obsolete
+26,Mid-year Part C Risk Adjustment Factor Change
+27,Retroactive Change to Congestive Heart Failure (CHF) Payment
+28,Retroactive Change to BIPA Part B Premium Reduction Amount
+29,Retroactive Change to Hospice Rate
+30,Retroactive Change to Basic Part D Premium
+31,Retroactive Change to Part D Low Income Status
+32,Retroactive Change to Estimated Cost-Sharing Amount
+33,Retroactive Change to Estimated Reinsurance Amount
+34,Retroactive Change Basic Part C Premium
+35,Retroactive Change to Rebate Amount
+36,Part D Rate Change
+37,Part D Risk Adjustment Factor Change
+38,Part C Segment ID Change
+41,Part D Risk Adjustment Factor Change (ongoing)
+42,Retroactive MSP Status
+44,Retroactive correction of previously failed Payment (affects Part C and D)
+45,Disenroll for Failure to Pay Part D IRMAA Premium – Reported for Pt C and Pt D
+46,Correction of Part D Eligibility – Reported for Pt D
+50,Payment adjustment due to Beneficiary Merge
+60,Part C Payment Adjustments created as a result of the RAS overpayment file processing
+61,Part D Payment Adjustments created as a result of the RAS overpayment file processing
+65,Confirmed Incarceration – Reported for Pt C and Pt D
+66,Not Lawfully Present
+90,System of Record History Alignment
+94,Special Payment Adjustment Due to Cleanup
+25,Part C Risk Adjustment Factor Change/Recon

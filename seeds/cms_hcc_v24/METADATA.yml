@@ -1,0 +1,26 @@
+source: Reference Author "Risk Score Model Tables.xlsx" (Azure/RAF) -- CMS-HCC V24 (2020 model)
+model_version: V24
+model_year: 2020
+last_updated: '2026-06-15'
+updated_by: data_engineering
+notes: >
+  CMS-HCC V24 community + institutional model tables extracted from the canonical
+  reference model workbook. Used by the V24/V28 transition blend only (PY2024/2025);
+  PY2026+ is 100% V28. V24 disease interactions are seeded
+  (cms_hcc_v24__interaction_coefficients + category_map + interaction_definitions)
+  but interaction scoring is deferred to a follow-up.
+files:
+  cms_hcc_v24__all_coefficients.csv:
+    description: Demographic + disease + originally-disabled coefficients, all 7 segments (CNA/CND/CFA/CFD/CPA/CPD/INS).
+  cms_hcc_v24__icd10_mappings.csv:
+    description: ICD-10 -> V24 HCC crosswalk.
+  cms_hcc_v24__hierarchy_exclusions.csv:
+    description: V24 HCC hierarchy trumping (hcc_code trumps excludes_hcc_code).
+  cms_hcc_v24__interaction_coefficients.csv:
+    description: V24 disease-interaction coefficients per segment (deferred from scoring).
+  cms_hcc_v24__interaction_definitions.csv:
+    description: V24 interaction category pairs -> INT code.
+  cms_hcc_v24__category_map.csv:
+    description: HCC -> diagnosis category for V24 interaction triggering.
+  cms_hcc_v24__hcc_labels.csv:
+    description: V24 HCC code -> label.

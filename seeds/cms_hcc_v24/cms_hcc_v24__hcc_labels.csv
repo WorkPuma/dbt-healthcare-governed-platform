@@ -1,0 +1,87 @@
+hcc_number,hcc_code,hcc_label
+1,HCC1,HIV/AIDS
+2,HCC2,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+6,HCC6,Opportunistic Infections
+8,HCC8,Metastatic Cancer and Acute Leukemia
+9,HCC9,Lung and Other Severe Cancers
+10,HCC10,Lymphoma and Other Cancers
+11,HCC11,"Colorectal, Bladder, and Other Cancers"
+12,HCC12,"Breast, Prostate, and Other Cancers and Tumors"
+17,HCC17,Diabetes with Acute Complications
+18,HCC18,Diabetes with Chronic Complications
+19,HCC19,Diabetes without Complication
+21,HCC21,Protein-Calorie Malnutrition
+22,HCC22,Morbid Obesity
+23,HCC23,Other Significant Endocrine and Metabolic Disorders
+27,HCC27,End-Stage Liver Disease
+28,HCC28,Cirrhosis of Liver
+29,HCC29,Chronic Hepatitis
+33,HCC33,Intestinal Obstruction/Perforation
+34,HCC34,Chronic Pancreatitis
+35,HCC35,Inflammatory Bowel Disease
+39,HCC39,Bone/Joint/Muscle Infections/Necrosis
+40,HCC40,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+46,HCC46,Severe Hematological Disorders
+47,HCC47,Disorders of Immunity
+48,HCC48,Coagulation Defects and Other Specified Hematological Disorders
+51,HCC51,Dementia With Complications
+52,HCC52,Dementia Without Complication
+54,HCC54,Substance Use with Psychotic Complications
+55,HCC55,"Substance Use Disorder, Moderate/Severe, or Substance Use with Complications"
+56,HCC56,"Substance Use Disorder, Mild, Except Alcohol and Cannabis"
+57,HCC57,Schizophrenia
+58,HCC58,Reactive and Unspecified Psychosis
+59,HCC59,"Major Depressive, Bipolar, and Paranoid Disorders"
+60,HCC60,Personality Disorders
+70,HCC70,Quadriplegia
+71,HCC71,Paraplegia
+72,HCC72,Spinal Cord Disorders/Injuries
+73,HCC73,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+74,HCC74,Cerebral Palsy
+75,HCC75,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+76,HCC76,Muscular Dystrophy
+77,HCC77,Multiple Sclerosis
+78,HCC78,Parkinson's and Huntington's Diseases
+79,HCC79,Seizure Disorders and Convulsions
+80,HCC80,"Coma, Brain Compression/Anoxic Damage"
+82,HCC82,Respirator Dependence/Tracheostomy Status
+83,HCC83,Respiratory Arrest
+84,HCC84,Cardio-Respiratory Failure and Shock
+85,HCC85,Congestive Heart Failure
+86,HCC86,Acute Myocardial Infarction
+87,HCC87,Unstable Angina and Other Acute Ischemic Heart Disease
+88,HCC88,Angina Pectoris
+96,HCC96,Specified Heart Arrhythmias
+99,HCC99,Intracranial Hemorrhage
+100,HCC100,Ischemic or Unspecified Stroke
+103,HCC103,Hemiplegia/Hemiparesis
+104,HCC104,"Monoplegia, Other Paralytic Syndromes"
+106,HCC106,Atherosclerosis of the Extremities with Ulceration or Gangrene
+107,HCC107,Vascular Disease with Complications
+108,HCC108,Vascular Disease
+110,HCC110,Cystic Fibrosis
+111,HCC111,Chronic Obstructive Pulmonary Disease
+112,HCC112,Fibrosis of Lung and Other Chronic Lung Disorders
+114,HCC114,Aspiration and Specified Bacterial Pneumonias
+115,HCC115,"Pneumococcal Pneumonia, Empyema, Lung Abscess"
+122,HCC122,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+124,HCC124,Exudative Macular Degeneration
+134,HCC134,Dialysis Status
+135,HCC135,Acute Renal Failure
+136,HCC136,"Chronic Kidney Disease, Stage 5"
+137,HCC137,"Chronic Kidney Disease, Severe (Stage 4)"
+138,HCC138,"Chronic Kidney Disease, Moderate (Stage 3)"
+157,HCC157,"Pressure Ulcer of Skin with Necrosis Through to Muscle, Tendon, or Bone"
+158,HCC158,Pressure Ulcer of Skin with Full Thickness Skin Loss
+159,HCC159,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+161,HCC161,"Chronic Ulcer of Skin, Except Pressure"
+162,HCC162,Severe Skin Burn or Condition
+166,HCC166,Severe Head Injury
+167,HCC167,Major Head Injury
+169,HCC169,Vertebral Fractures without Spinal Cord Injury
+170,HCC170,Hip Fracture/Dislocation
+173,HCC173,Traumatic Amputations and Complications
+176,HCC176,Complications of Specified Implanted Device or Graft
+186,HCC186,Major Organ Transplant or Replacement Status
+188,HCC188,Artificial Openings for Feeding or Elimination
+189,HCC189,"Amputation Status, Lower Limb/Amputation Complications"

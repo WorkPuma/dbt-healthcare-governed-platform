@@ -1,0 +1,57 @@
+version: 2
+
+seeds:
+  # Risk-adjustability CPT/HCPCS gate, acute exclusion, and MMR adjustment-reason
+  # reference tables (sourced from Reference Author's model reference tables).
+  - name: ref_raf__risk_adjustable_cpt
+    description: CPT/HCPCS codes that qualify an encounter for RAF-eligible diagnosis capture.
+    columns:
+      - name: cpt_code
+        tests: [not_null, unique]
+      - name: description
+      - name: start_date
+      - name: end_date
+
+  - name: ref_raf__acute_icd10
+    description: CMS acute diagnosis codes excluded from risk-adjustable RAF capture.
+    columns:
+      - name: icd10_code
+        tests: [not_null, unique]
+      - name: description
+
+  - name: ref_raf__mmr_adjustment_reasons
+    description: CMS MMR adjustment reason code reference.
+    columns:
+      - name: adjustment_reason_code
+        tests: [not_null, unique]
+      - name: description
+
+  - name: ref_raf__data_collection_periods
+    description: >
+      Governed map of CMS-HCC payment_year -> diagnosis_coded_year (the prospective
+      distinction) and the is_scoreable flag that gates which payment years the
+      scored facts emit. One row per payment_year. is_scoreable is true only for
+      payment years with a complete prior-year diagnosis basis given the Oct-2024
+      EMR data inception (PY2026 onward). Single source of truth for the year axis.
+    config:
+      tags: ["raf", "reference", "seed"]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["payment_year"]
+          config:
+            severity: error
+    columns:
+      - name: payment_year
+        description: "CMS payment/settlement year."
+        data_tests:
+          - not_null
+          - unique
+      - name: diagnosis_coded_year
+        description: "Diagnosis (date-of-service) year scored for this payment year."
+        data_tests:
+          - not_null
+      - name: is_scoreable
+        description: "True when this payment year has a complete prior-year diagnosis basis and is produced by the scored facts."
+        data_tests:
+          - not_null

@@ -1,0 +1,286 @@
+version: 2
+
+# Schema — DEV-4296 PAYOR_C sidecar marts.
+# Roster (A ∪ C) -> demographics -> submission-driven contract output (the 49-col file) +
+# gap-evidence (internal visibility, never sent to PAYOR_C). Mirrors the shape of the PAYOR_A
+# mart schema files but PAYOR_C-native predicates (Constitution P14).
+
+models:
+  - name: fct_quality__payor_gamma_roster
+    description: >
+      PAYOR_C payer roster (A ∪ C per Quality Constitution Q1): MDM membership/attribution
+      union'd with Athena primary-active insurance (payor_group='PAYOR_C', sequence_number=1),
+      MDM-compliance filtered (D1/D2: deleted_yn='N', test_patient_yn='N'). Grain: one row
+      per patient_id.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, mart, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id. Grain key."
+        data_tests: [not_null, unique]
+      - name: is_mdm_membership
+        description: "True if sourced from membership_monthly_snapshot (primary_payor ILIKE 'PAYOR_C%')."
+        data_tests: [not_null]
+      - name: is_mdm_attribution
+        description: "True if sourced from int_attribution_point_in_time (roster_payor ILIKE '%PAYOR_C%', active)."
+        data_tests: [not_null]
+      - name: is_insurance_primary_active
+        description: "True if sourced from stg_quality__patient_insurance (payor_group='PAYOR_C', sequence_number=1, coverage overlaps the MY)."
+        data_tests: [not_null]
+      - name: roster_tier
+        description: "A_AND_C (both MDM + insurance legs) / A_ONLY (MDM only) / C_ONLY (insurance only)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A_AND_C', 'A_ONLY', 'C_ONLY']
+      - name: measurement_year
+        description: "Measurement year; var `measurement_year`, default = current calendar year at compile time (modules.datetime), so MY rolls over with no YAML/SQL edit."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+      - name: generated_at
+        description: "current_timestamp() at build time."
+
+  - name: fct_quality__payor_gamma_submission_demographics
+    description: >
+      The IDENTITY half of PAYOR_C's 49-column MY2026 Standard Supplemental Data file (cols
+      1-9): Member Card ID, First/Last name, DOB, Gender, SSN, Medicare ID, Medicaid ID.
+      Identity from mdm.reference_data.patient (D1/D2 compliant); Member Card ID primary =
+      athena PAYOR_C policy (sequencenumber asc, issuedate desc), fallback = EMPI golden
+      record (payor='PAYOR_C', approved). Grain: one row per patient_id.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, mart, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id. Grain key."
+        data_tests: [not_null, unique]
+      - name: member_card_id
+        description: "PAYOR_C policyidnumber (primary, sequencenumber-ranked) or EMPI golden-record payor_member_id (fallback); '' if neither resolves."
+      - name: first_name
+        description: "mdm.reference_data.patient first name."
+      - name: last_name
+        description: "mdm.reference_data.patient last name."
+      - name: date_of_birth
+        description: "Formatted YYYYMMDD per PAYOR_C layout spec (col 4)."
+      - name: gender
+        description: "Normalized to 'F'/'M' where the source resolves; otherwise passed through raw."
+      - name: ssn
+        description: "Optional per spec (col 6, 'N'); v1 blank unless sourced from athenahealth.athenaone.patient.patientssn."
+      - name: medicare_id
+        description: "Optional per spec (col 7, 'N'); Medicare-package policyidnumber, most-recent wins."
+      - name: medicaid_id
+        description: "Optional per spec (col 8, 'N'); Medicaid-package policyidnumber, most-recent wins."
+      - name: measurement_year
+        description: "Measurement year; var `measurement_year`, default = current calendar year at compile time (modules.datetime), so MY rolls over with no YAML/SQL edit."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+
+  - name: fct_quality__payor_gamma_contract_output
+    description: >
+      THE 49-column PAYOR_C MY2026 Standard Supplemental Data deliverable (positional — order
+      IS the contract, do not reorder). Unions CODED rows (int_quality__payor_gamma_submission,
+      one row per patient x measure x code x date routed to its layout_location column) with
+      BP rows (paired systolic/diastolic, most-recent date with both, lowest representative).
+      Deduped by group-by across all 49 columns; member_card_id-required gate applied (a row
+      with no PAYOR_C Member Card ID is unfileable). The actual file write is a separate
+      Python step (export_payor_gamma_submission.py) that reads this mart.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, mart, PAYOR_C, dev-4296]
+    columns:
+      - name: member_card_id
+        description: "Col 1 — required (spec 'Y'); rows with no resolvable Member Card ID are excluded upstream (never blank in this mart)."
+        data_tests: [not_null]
+      - name: member_first_name
+        description: "Col 2 — from fct_quality__payor_gamma_submission_demographics.first_name."
+      - name: member_last_name
+        description: "Col 3 — from fct_quality__payor_gamma_submission_demographics.last_name."
+      - name: member_dob
+        description: "Col 4 — YYYYMMDD."
+      - name: member_gender
+        description: "Col 5 — from fct_quality__payor_gamma_submission_demographics.gender."
+      - name: member_ssn
+        description: "Col 6 — spec 'N' (optional). Intentionally BLANK: SSN is not stored or used anywhere in this pipeline (PHI; never a match key)."
+      - name: member_medicare_id
+        description: "Col 7 — optional (spec 'N'); Medicare-package policyidnumber, most-recent wins."
+      - name: member_medicaid_id
+        description: "Col 8 — optional (spec 'N'); Medicaid-package policyidnumber, most-recent wins."
+      - name: rendering_provider_npi
+        description: "Athena provider NPI for the patient's primary provider (col 9)."
+      - name: service_date
+        description: "Col 10 — YYYYMMDD (date_of_service formatted)."
+        data_tests: [not_null]
+      - name: revenue_code
+        description: "Col 11 — populated when the routed layout_location is 'Revenue Code'; blank otherwise."
+      - name: icd_diagnosis_code_1
+        description: "Col 12 — WHO-dotted ICD-10-CM (re-dotted from code_pool's dotless storage)."
+      - name: icd_diagnosis_code_2
+        description: "Col 13 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_3
+        description: "Col 14 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_4
+        description: "Col 15 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_5
+        description: "Col 16 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_6
+        description: "Col 17 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_7
+        description: "Col 18 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_8
+        description: "Col 19 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_9
+        description: "Col 20 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_diagnosis_code_10
+        description: "Col 21 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_1
+        description: "Col 22 — ICD-10-PCS, no dot."
+      - name: procedural_icd_code_2
+        description: "Col 23 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_3
+        description: "Col 24 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_4
+        description: "Col 25 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_5
+        description: "Col 26 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_6
+        description: "Col 27 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_7
+        description: "Col 28 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_8
+        description: "Col 29 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_9
+        description: "Col 30 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: procedural_icd_code_10
+        description: "Col 31 — not produced by the funnel today (v1 blank; only slot 1 is populated)."
+      - name: icd_version
+        description: "'10' when an ICD diagnosis or procedural code is present, else blank."
+      - name: cpt_cptii_hcpcs_code
+        description: "Col 33."
+      - name: cpt_modifier_1
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: cpt_modifier_2
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: cpt_result
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: loinc_code
+        description: "Col 37."
+      - name: loinc_result
+        description: "Col 38."
+      - name: bmi_value
+        description: "Not produced by the funnel today (v1 blank; BMI flows via Z68.* ICD instead)."
+      - name: member_weight
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: bp_systolic
+        description: "Col 41 — lowest representative systolic reading, paired-date basis."
+      - name: bp_diastolic
+        description: "Col 42 — lowest representative diastolic reading, paired-date basis."
+      - name: ndc_code
+        description: "Col 43."
+      - name: snomed_code
+        description: "Col 44."
+      - name: prov_rec_id
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: discharge_status_code
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: pot_code
+        description: "Col 47."
+      - name: cvx_clinical_cd
+        description: "Col 48."
+      - name: rx_norm_cd
+        description: "Not produced by the funnel today (v1 blank)."
+      - name: measures_served
+        description: "QA-only (not part of the 49-col file): comma-joined sorted distinct measure abbreviations that contributed to this row group."
+      - name: evidence_provenance
+        description: "QA-only (not part of the 49-col file): comma-joined sorted distinct evidence-provenance tiers."
+      - name: measurement_year
+        description: "QA-only (not part of the 49-col file)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+
+  - name: fct_quality__payor_gamma_gap_evidence
+    description: >
+      PAYOR_C gap deliverable — the internal VISIBILITY surface (never sent to PAYOR_C). Every
+      (patient x measure) in the QM-anchored denominator that did NOT close with a
+      submittable code (closure_tier not in CODED_NATIVE, NOT_ELIGIBLE_NONDIABETIC). The
+      headline tier is QM_MET_NO_CODE — athena's own QM engine says SATISFIED but the
+      submission path shipped nothing.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, mart, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Patient with an unresolved (patient x measure) gap. From int_quality__payor_gamma_measure_evidence_summary."
+        data_tests: [not_null]
+      - name: member_card_id
+        description: "From fct_quality__payor_gamma_submission_demographics; '' if unresolved (gap rows are never dropped for missing card)."
+      - name: member_first_name
+        description: "From fct_quality__payor_gamma_submission_demographics.first_name."
+      - name: member_last_name
+        description: "From fct_quality__payor_gamma_submission_demographics.last_name."
+      - name: member_dob
+        description: "From fct_quality__payor_gamma_submission_demographics.date_of_birth (YYYYMMDD)."
+      - name: member_gender
+        description: "From fct_quality__payor_gamma_submission_demographics.gender."
+      - name: measure
+        description: "HEDIS measure abbreviation for this gap row."
+        data_tests: [not_null]
+      - name: evidence_source
+        description: "closure_tier from int_quality__payor_gamma_measure_evidence_summary, excluding CODED_NATIVE and NOT_ELIGIBLE_NONDIABETIC (those never reach this mart)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EXCLUDED', 'KED_INCOMPLETE_PAIR', 'QM_MET_NO_CODE', 'POSSIBLE_CLOSURE', 'OPEN_GAP']
+      - name: gap_reason
+        description: "Machine-readable gap explanation (e.g. '<MEASURE>_QM_MET_NO_SUBMITTABLE_CODE') from int_quality__payor_gamma_measure_evidence_summary."
+        data_tests: [not_null]
+      - name: athena_quality
+        description: "Athena QM engine raw quality flag (0/1) from int_quality__payor_gamma_measure_evidence_summary."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: athena_quality_satisfied
+        description: "1 when Athena's QM engine reports the measure SATISFIED for this patient, else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: is_excluded
+        description: "1 when the patient is excluded from the measure denominator, else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: has_diabetes
+        description: "1 when the patient has a diabetes diagnosis (used for NOT_ELIGIBLE_NONDIABETIC exclusion upstream), else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: measurement_year
+        description: "Measurement year; var `measurement_year`, default = current calendar year at compile time (modules.datetime), so MY rolls over with no YAML/SQL edit."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false

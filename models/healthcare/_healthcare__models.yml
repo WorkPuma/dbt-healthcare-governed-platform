@@ -1,0 +1,1026 @@
+version: 2
+
+models:
+  - name: mv_attribution_self_service
+    description: |
+      **Unified Patient Attribution Self-Service Model**
+
+      Single source of truth for all patient attribution data, consolidating
+      Salesforce attribution records with patient demographics, clinical status,
+      appointment tracking, and case management.
+
+      **Key Features:**
+      - Patient demographics and contact info
+      - Attribution status and payor information
+      - AWV (Annual Wellness Visit) tracking with actionability flags
+      - MDDO (MD/DO Visit) tracking with actionability flags
+      - Off-Cadence follow-up tracking
+      - Appointment scheduling status
+      - Portal access flags for all major payors
+      - Data quality scoring
+      - Derived action_required field for workflows
+
+      **Used By:**
+      - Volume Attribution Dashboard (Superset/BIPlatform)
+      - WBR Ops Metrics Dashboard
+      - AWV Scheduling Reports
+      - Case Management Workflows
+      - SemanticLayer Semantic Layer
+
+      **Refresh Schedule:** Every 10 hours (table materialization)
+
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: [ "attribution", "self_service", "vbc", "cube" ]
+
+    tests:
+      # MERGE-never-deletes drift: attribution_ids in target that no longer exist in
+      # raw salesforce.attribution__c (hard-deleted from SF). 15,906 such phantoms were
+      # cleaned 2026-04-28 (44% of table). Test prevents silent re-accumulation.
+      - no_filter_drift:
+          arguments:
+            key_column: attribution_id
+            source_database: databricks_prod
+            source_schema: salesforce
+            source_identifier: attribution__c
+            source_key_column: Id
+          config:
+            severity: warn
+            tags: [ "elementary", "filter_drift", "data_quality" ]
+
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: attribution_id
+        data_type: string
+        description: Salesforce Attribution record ID (Primary Key)
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+      - name: account_id
+        data_type: string
+        description: Salesforce Account ID (Patient)
+        constraints:
+          - type: not_null
+
+      - name: patient_id
+        data_type: string
+        description: Athena Patient ID (links to MDM)
+
+      - name: patient_name
+        data_type: string
+        description: Full patient name from Account
+
+      - name: clinic
+        data_type: string
+        description: Assigned clinic/department
+
+      - name: provider_name
+        data_type: string
+        description: Primary Care Provider name
+
+      - name: payor_category
+        data_type: string
+        description: Derived payor category (Original Medicare, Medicare Advantage,
+          PAYOR_A, PAYOR_B, etc.)
+
+      - name: payor_brand
+        data_type: string
+        description: Derived payor brand for dashboard filtering
+
+      - name: attribution_status
+        data_type: string
+        description: Current attribution status
+
+      - name: is_active
+        data_type: boolean
+        description: Whether attribution is currently active
+
+      - name: workflow_type
+        data_type: string
+        description: Derived workflow type for case routing
+
+      - name: data_quality_score
+        data_type: int
+        description: Calculated data quality score (0-100)
+
+      - name: awv_visit_status
+        data_type: string
+        description: AWV visit status (Eligible, Scheduled, Completed, Not Required)
+
+      - name: awv_is_actionable
+        data_type: boolean
+        description: Flag indicating if AWV action is needed
+
+      - name: awv_is_completed
+        data_type: boolean
+        description: Flag indicating if AWV is completed
+
+      - name: awv_is_scheduled
+        data_type: boolean
+        description: Flag indicating if AWV is scheduled
+
+      - name: mddo_visit_status
+        data_type: string
+        description: MD/DO visit status
+
+      - name: mddo_is_actionable
+        data_type: boolean
+        description: Flag indicating if MDDO action is needed
+
+      - name: mddo_is_completed
+        data_type: boolean
+        description: Flag indicating if MDDO visit is completed
+
+      - name: mddo_is_scheduled
+        data_type: boolean
+        description: Flag indicating if MDDO visit is scheduled
+
+      - name: off_cadence_active
+        data_type: boolean
+        description: Flag indicating if patient is off-cadence
+
+      - name: action_required
+        data_type: string
+        description: Derived action required (Off Cadence, Needs AWV, Needs MDDO, No
+          Action Required)
+
+      - name: next_scheduled_visit
+        data_type: timestamp
+        description: Next scheduled appointment datetime
+
+      - name: source_updated_at
+        data_type: timestamp
+        description: Source-system timestamp tracking when upstream data last changed
+          (replaces mv_refresh_timestamp for CDF-accurate change detection)
+
+      - name: attribution_name
+        data_type: string
+        description: Attribution record name
+
+      - name: patient_first_name
+        data_type: string
+        description: Patient first name
+
+      - name: patient_last_name
+        data_type: string
+        description: Patient last name
+
+      - name: patient_email
+        data_type: string
+        description: Patient email address
+
+      - name: patient_dob
+        data_type: date
+        description: Patient date of birth
+
+      - name: patient_gender
+        data_type: string
+        description: Patient gender
+
+      - name: patient_status
+        data_type: string
+        description: Patient active status (a=active, i=inactive, p=prospect, d=deceased)
+
+      - name: is_active_patient
+        data_type: boolean
+        description: Whether the patient is currently active
+
+      - name: risk_tier
+        data_type: string
+        description: Patient risk tier classification
+
+      - name: provider_id
+        data_type: string
+        description: Primary Care Provider Salesforce ID
+
+      - name: provider_npi
+        data_type: string
+        description: Provider National Provider Identifier
+
+      - name: provider_credentials
+        data_type: string
+        description: Provider credential designation (MD, DO, NP, etc.)
+
+      - name: is_physician
+        data_type: boolean
+        description: Whether the provider is a physician (MD/DO)
+
+      - name: provider_specialty
+        data_type: string
+        description: Provider medical specialty
+
+      - name: mdm_assigned_clinic
+        data_type: string
+        description: Clinic assigned via MDM golden record
+
+      - name: sf_payor_type
+        data_type: string
+        description: Salesforce payor type from attribution record
+
+      - name: primary_insurance_name
+        data_type: string
+        description: Primary insurance plan name
+
+      - name: primary_insurance_source
+        data_type: string
+        description: Source system for primary insurance data
+
+      - name: sf_primary_payor
+        data_type: string
+        description: Salesforce primary payor name
+
+      - name: sf_primary_product_type
+        data_type: string
+        description: Salesforce primary product type (HMO, PPO, etc.)
+
+      - name: secondary_payor
+        data_type: string
+        description: Secondary insurance payor name
+
+      - name: secondary_product_type
+        data_type: string
+        description: Secondary insurance product type
+
+      - name: sf_attributed_payor
+        data_type: string
+        description: Salesforce attributed payor for value-based care
+
+      - name: attribution_stage
+        data_type: string
+        description: Current stage in attribution workflow
+
+      - name: priority
+        data_type: string
+        description: Attribution priority level
+
+      - name: awv_case_status
+        data_type: string
+        description: AWV Salesforce Case status
+
+      - name: awv_sub_status
+        data_type: string
+        description: AWV Case sub-status for detailed tracking
+
+      - name: awv_case_id
+        data_type: string
+        description: Salesforce Case ID for AWV tracking
+
+      - name: awv_last_activity
+        data_type: timestamp
+        description: Last activity date on the AWV Case
+
+      - name: mddo_case_status
+        data_type: string
+        description: MDDO Salesforce Case status
+
+      - name: mddo_sub_status
+        data_type: string
+        description: MDDO Case sub-status for detailed tracking
+
+      - name: mddo_case_id
+        data_type: string
+        description: Salesforce Case ID for MDDO tracking
+
+      - name: mddo_last_activity
+        data_type: timestamp
+        description: Last activity date on the MDDO Case
+
+      - name: off_cadence_status
+        data_type: string
+        description: Off-cadence Case status
+
+      - name: off_cadence_sub_status
+        data_type: string
+        description: Off-cadence Case sub-status
+
+      - name: off_cadence_case_id
+        data_type: string
+        description: Salesforce Case ID for off-cadence tracking
+
+      - name: is_6_months_unengaged
+        data_type: boolean
+        description: Patient has not engaged in 6+ months
+
+      - name: is_12_months_unengaged
+        data_type: boolean
+        description: Patient has not engaged in 12+ months
+
+      - name: is_18_months_inactive
+        data_type: boolean
+        description: Patient has been inactive for 18+ months
+
+      - name: last_awv_date
+        data_type: date
+        description: Date of most recent Annual Wellness Visit
+
+      - name: last_completed_visit_date
+        data_type: timestamp
+        description: Timestamp of last completed visit of any type
+
+      - name: sf_next_visit_date
+        data_type: timestamp
+        description: Next visit date from Salesforce
+
+      - name: sf_next_visit_type
+        data_type: string
+        description: Next visit type from Salesforce
+
+      - name: membership_enrollment
+        data_type: string
+        description: Membership enrollment status
+
+      - name: membership_eligible
+        data_type: boolean
+        description: Whether patient is eligible for membership
+
+      - name: mdm_golden_id
+        data_type: string
+        description: MDM golden record identifier
+
+      - name: mdm_in_salesforce
+        data_type: boolean
+        description: Whether the MDM record exists in Salesforce
+
+      - name: appointment_id
+        data_type: string
+        description: Current/next Athena appointment ID
+
+      - name: appointment_cancelled
+        data_type: boolean
+        description: Whether the appointment was cancelled
+
+      - name: appointment_rescheduled
+        data_type: boolean
+        description: Whether the appointment was rescheduled
+
+      - name: days_until_appointment
+        data_type: double
+        description: Days until the next scheduled appointment
+
+      - name: patient_checked_in
+        data_type: boolean
+        description: Whether the patient has checked in for their appointment
+
+      - name: completed_appointment_count
+        data_type: double
+        description: Total number of completed appointments
+
+      - name: future_appointment_count
+        data_type: double
+        description: Number of future scheduled appointments
+
+      - name: cancelled_appointment_count
+        data_type: double
+        description: Total number of cancelled appointments
+
+      - name: attribution_created_date
+        data_type: timestamp
+        description: Timestamp when the attribution record was created
+
+      - name: attribution_modified_date
+        data_type: timestamp
+        description: Timestamp when the attribution record was last modified
+
+      - name: attribution_confirmed_date
+        data_type: timestamp
+        description: Timestamp when the attribution was confirmed
+
+      - name: attribution_effective_date
+        data_type: date
+        description: Effective date of the attribution
+
+      - name: attribution_start_time
+        data_type: timestamp
+        description: Start time of the attribution period
+
+      - name: submission_date
+        data_type: timestamp
+        description: Date the attribution was submitted
+
+      - name: last_validation_date
+        data_type: timestamp
+        description: Date of last attribution validation
+
+      - name: medicare_portal_accessed
+        data_type: boolean
+        description: Whether Medicare portal was accessed for validation
+
+      - name: payor_alpha_portal_accessed
+        data_type: boolean
+        description: Whether PAYOR_A portal was accessed for validation
+
+      - name: uhc_portal_accessed
+        data_type: boolean
+        description: Whether PAYOR_B portal was accessed for validation
+
+      - name: ucare_portal_accessed
+        data_type: boolean
+        description: Whether UCare portal was accessed for validation
+
+      - name: medica_portal_accessed
+        data_type: boolean
+        description: Whether Medica portal was accessed for validation
+
+      - name: payor_epsilon_portal_accessed
+        data_type: boolean
+        description: Whether Payor Epsilon portal was accessed for validation
+
+      - name: payor_delta_portal_accessed
+        data_type: boolean
+        description: Whether Payor Delta portal was accessed for validation
+
+      - name: payor_gamma_portal_accessed
+        data_type: boolean
+        description: Whether PAYOR_C portal was accessed for validation
+
+      - name: validation_status
+        data_type: string
+        description: Current validation status of the attribution
+
+      - name: needs_review
+        data_type: boolean
+        description: Whether the attribution needs manual review
+
+      - name: review_reason
+        data_type: string
+        description: Reason the attribution was flagged for review
+
+      - name: hold_reason
+        data_type: string
+        description: Reason the attribution is on hold
+
+      - name: owner_id
+        data_type: string
+        description: Salesforce owner ID for the attribution record
+
+      - name: system_modstamp
+        data_type: timestamp
+        description: Salesforce system modification timestamp
+
+  # ============================================
+  # Attribution Unified (AWV/MDDO Population Health)
+  # ============================================
+  - name: vw_attribution_unified
+    description: |
+      **Unified Attribution View — Dual-Source Tracking**
+
+      Combines Salesforce Cases (operational/actionable) with Athena analytics
+      (broader population health definition) for AWV and MDDO tracking.
+
+      **Key Fields:**
+      - clinic: From Salesforce Preferred_Clinic__c (synced from Athena Department_ID__c)
+      - is_analytics_awv_eligible: Broader analytics definition (Active + Medicare + visit history)
+      - is_case_awv_actionable: Narrower operational definition (open Case ready for scheduling)
+      - is_case_mddo_actionable: Original Medicare patients with open MDDO Case
+
+      **Used By:** WBR Dashboard, AWV Scheduling, MDDO Scheduling, SemanticLayer attribution_detail
+
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: [ "attribution", "unified", "cube", "superset" ]
+
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+
+    columns:
+      - name: account_id
+        data_type: string
+        description: Salesforce Account ID (Patient)
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+      - name: clinic
+        data_type: string
+        description: >
+          Effective patient clinic. Coalesces Salesforce Preferred_Clinic__c with
+          a derived value pulled from the patient's most-recent completed primary
+          care Athena appointment when SF is unset. Closes the ~21% NULL gap on
+          active patients caused by SF backfill lag (down to <1% on active patients
+          as of 2026-04-30). Valid values: Crystal, Eagan, Highland Park, Lyndale,
+          Rosedale. See `sf_preferred_clinic` for the raw SF-only value.
+        tests:
+          - not_null:
+              config:
+                description: "Active patients must have a clinic assignment"
+                severity: warn
+                warn_if: ">100"
+                error_if: ">500"
+                where: "patient_status = 'Active'"
+                tags: [ "elementary", "completeness", "attribution" ]
+          - accepted_values:
+              arguments:
+                values: [ "Crystal", "Eagan", "Highland Park", "Lyndale", "Rosedale" ]
+              config:
+                description: "Clinic must be a valid patient-facing location"
+                severity: warn
+                where: "patient_status = 'Active'"
+                tags: [ "elementary", "data_quality", "attribution" ]
+
+      - name: sf_preferred_clinic
+        data_type: string
+        description: >
+          Raw Salesforce Account.Preferred_Clinic__c value (no fallback). Use this
+          to detect SF-side data quality gaps (patients seen at the clinic but
+          never had Preferred_Clinic__c set). For dashboard filters, prefer the
+          coalesced `clinic` column above.
+
+      - name: patient_status
+        data_type: string
+        description: Patient active status (a=active, i=inactive, p=prospect, d=deceased)
+
+      - name: is_analytics_awv_eligible
+        data_type: boolean
+        description: "Broader AWV eligibility: Active + Medicare + completed visit history"
+
+      - name: is_case_awv_actionable
+        data_type: boolean
+        description: "Narrower AWV: has open AWV Case ready for scheduling"
+
+      - name: is_case_mddo_actionable
+        data_type: boolean
+        description: "Original Medicare patients with open MDDO Case"
+
+      - name: is_on_cadence
+        data_type: boolean
+        description: >
+          TRUE when sf_off_cadence_actual = false AND
+          sf_future_appointment_number > 0. Uses the legacy Salesforce
+          Off_Cadence_Actual__c flag — NOT vw_off_cadence_eligibility /
+          is_off_cadence_eligible_canonical.
+
+      - name: is_cadence_denominator_patient
+        data_type: boolean
+        description: "Included in cadence rate denominator (excludes brand new
+          never-seen patients)"
+
+      - name: pcp_is_physician
+        data_type: boolean
+        description: "True when PCP is a physician (MD/DO) per MDM provider classification"
+
+      - name: is_mddo_eligible
+        data_type: boolean
+        description: "Active Original Medicare + PCP is NOT MD/DO. Population needing
+          physician visit."
+
+      - name: has_mddo_visit_completed
+        data_type: boolean
+        description: "Completed a visit with a physician (MD/DO) in current year. From
+          Athena appointments."
+
+      - name: has_mddo_visit_scheduled
+        data_type: boolean
+        description: "Has a future physician visit scheduled through EOY. From Athena
+          appointments."
+
+      - name: source_updated_at
+        data_type: timestamp
+        description: Source-system timestamp tracking when upstream data last changed
+          (replaces view_refresh_timestamp for CDF-accurate change detection)
+
+      - name: athena_patient_id
+        data_type: string
+        description: Athena Patient ID from MDM
+
+      - name: patient_name
+        data_type: string
+        description: Full patient name from Salesforce Account
+
+      - name: provider_id
+        data_type: string
+        description: Primary Care Provider Salesforce ID
+
+      - name: provider_name
+        data_type: string
+        description: Primary Care Provider name
+
+      - name: is_active_patient
+        data_type: boolean
+        description: Whether the patient is currently active
+
+      - name: primary_product_type
+        data_type: string
+        description: Primary insurance product type (HMO, PPO, etc.)
+
+      - name: primary_payor
+        data_type: string
+        description: Primary payor name
+
+      - name: attributed_payor
+        data_type: string
+        description: Attributed payor for value-based care
+
+      - name: attribution_id
+        data_type: string
+        description: Salesforce Attribution record ID
+
+      - name: sf_payor_type
+        data_type: string
+        description: Salesforce payor type from attribution record
+
+      - name: attribution_status
+        data_type: string
+        description: Current attribution status
+
+      - name: is_attribution_active
+        data_type: boolean
+        description: Whether the attribution is currently active
+
+      - name: sf_awv_status
+        data_type: string
+        description: Salesforce AWV status field value
+
+      - name: awv_case_id
+        data_type: string
+        description: Salesforce Case ID for AWV tracking
+
+      - name: awv_case_status
+        data_type: string
+        description: AWV Salesforce Case status
+
+      - name: awv_sub_status
+        data_type: string
+        description: AWV Case sub-status for detailed tracking
+
+      - name: analytics_awv_eligible
+        data_type: boolean
+        description: Analytics-derived AWV eligibility flag
+
+      - name: analytics_awv_ytd_status
+        data_type: string
+        description: Year-to-date AWV status from analytics
+
+      - name: medicare_category
+        data_type: string
+        description: Medicare category classification (Original, Advantage, etc.)
+
+      - name: attributed_payor_analytics
+        data_type: string
+        description: Attributed payor from analytics derivation
+
+      - name: attributed_payor_canonical
+        data_type: string
+        description: EMPI-based canonical attributed payor from payor roster files (not
+          Salesforce). Falls back to Salesforce attributed_payor when EMPI data
+          is unavailable.
+
+      - name: empi_attributed_payors
+        data_type: string
+        description: EMPI-derived attributed payor list
+
+      - name: empi_is_attributed
+        data_type: boolean
+        description: Whether patient is attributed per EMPI
+
+      - name: sf_mddo_status
+        data_type: string
+        description: Salesforce MDDO status field value
+
+      - name: mddo_case_id
+        data_type: string
+        description: Salesforce Case ID for MDDO tracking
+
+      - name: mddo_case_status
+        data_type: string
+        description: MDDO Salesforce Case status
+
+      - name: mddo_sub_status
+        data_type: string
+        description: MDDO Case sub-status for detailed tracking
+
+      - name: off_cadence_active
+        data_type: boolean
+        description: Flag indicating if patient is off-cadence
+
+      - name: off_cadence_case_id
+        data_type: string
+        description: Salesforce Case ID for off-cadence tracking
+
+      - name: off_cadence_status
+        data_type: string
+        description: Off-cadence Case status
+
+      - name: validation_status
+        data_type: string
+        description: Current validation status of the attribution
+
+      - name: needs_review
+        data_type: boolean
+        description: Whether the attribution needs manual review
+
+      - name: hold_reason
+        data_type: string
+        description: Reason the attribution is on hold
+
+      - name: is_mdm_compliant
+        data_type: boolean
+        description: Whether the patient record is MDM compliant (excludes test/deleted)
+
+      - name: completed_appointment_count
+        data_type: bigint
+        description: Total number of completed appointments
+
+      - name: awv_eligibility_source
+        data_type: string
+        description: Source of AWV eligibility determination (analytics vs case)
+
+      - name: is_awv_gap
+        data_type: boolean
+        description: Whether patient has an AWV gap (eligible but not completed/scheduled)
+
+      - name: action_required
+        data_type: string
+        description: Derived action required for patient workflow
+
+      - name: sf_off_cadence_actual
+        data_type: boolean
+        description: >
+          Passthrough of Account.Off_Cadence_Actual__c (legacy SF formula).
+          Powers is_on_cadence in this model; not the canonical
+          vw_off_cadence_eligibility flags.
+
+      - name: sf_future_appointment_number
+        data_type: double
+        description: Number of future appointments from Salesforce
+
+      - name: sf_completed_visits
+        data_type: double
+        description: Number of completed visits from Salesforce
+
+      - name: sf_last_modified
+        data_type: timestamp
+        description: Salesforce record last modified timestamp
+
+  # ============================================
+  # TCM Models
+  # ============================================
+  - name: v_preop_tcm_patients
+    description: >
+      Pre-Op TCM Patients view. Migrated from Snowflake
+      INT_STAGE.AZSQL.V_PREOP_TCM_PATIENTS. Shows future pre-op appointments for
+      patients who have had a transitional care event. Used by care coordinators
+      to identify patients needing pre-operative TCM follow-up.
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID"
+        constraints:
+          - type: not_null
+      - name: appointment_id
+        description: "Athena Appointment ID for the pre-op visit"
+        tests:
+          - not_null
+      - name: appointment_date
+        description: "Date of the pre-op appointment"
+      - name: appointment_type
+        description: "Appointment type name (contains 'Pre-Op')"
+      - name: last_discharge_date
+        description: "Most recent discharge date from TOC reporting"
+      - name: last_hospital
+        description: "Hospital from most recent discharge"
+      - name: care_coordinator
+        description: "Assigned care coordinator (case owner)"
+      - name: attributed_patient
+        description: "Whether the patient is attributed"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - appointment_id
+
+  # ============================================
+  # Portal Activity (Scheduling)
+  # ============================================
+  - name: mv_portal_activity
+    description: |
+      **Portal Activity Report - Consolidated Reschedules**
+
+      Shows patient portal scheduling activity with reschedules consolidated
+      into single rows. Three action types tracked:
+      - **Rescheduled**: Cancel + schedule on same day for same patient (shows date transitions)
+      - **Scheduled**: Standalone portal-scheduled appointments (not part of a reschedule)
+      - **Cancelled**: Standalone portal-cancelled appointments (not part of a reschedule)
+
+      Uses RESCHEDULEDAPPOINTMENTID to link cancel + schedule pairs.
+
+      **MDM Compliance**: Excludes test and deleted patients via mdm.patient join.
+
+      **Data Sync Note**: 2-3+ day delay for recent portal activity.
+
+      **Used By:**
+      - Portal Activity Dashboard (BIPlatform BI)
+      - Scheduling Operations Review
+
+      **Refresh Schedule:** Every 10 hours (table materialization)
+
+    config:
+      contract:
+        enforced: true
+      meta:
+        cube: true
+      tags: [ "scheduling", "portal", "cube", "BIPlatform" ]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - activity_id
+              - action
+
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: activity_date
+        data_type: date
+        description: >
+          Date the portal action occurred. For reschedules: the cancellation
+          date. For schedules: when the appointment was scheduled via portal.
+          For cancellations: when the appointment was cancelled via portal.
+        constraints:
+          - type: not_null
+
+      - name: scheduled_by
+        data_type: string
+        description: "Always 'Patient Portal' - identifies the scheduling channel"
+
+      - name: action
+        data_type: string
+        description: >
+          Type of portal activity: 'Rescheduled' (cancel + new booking same
+          day), 'Scheduled' (new booking only), or 'Cancelled' (cancellation
+          only). Values: Rescheduled, Scheduled, Cancelled.
+        constraints:
+          - type: not_null
+        tests:
+          - accepted_values:
+              arguments:
+                values: [ "Rescheduled", "Scheduled", "Cancelled" ]
+
+      - name: appointment_type
+        data_type: string
+        description: "Athena appointment type name (e.g., Routine Visit, Telehealth
+          Routine Visit)"
+
+      - name: patient_id
+        data_type: decimal(10,0)
+        description: "Athena Patient ID. Excludes test/deleted patients via MDM compliance."
+        constraints:
+          - type: not_null
+
+      - name: patient_name
+        data_type: string
+        description: "Patient full name in 'LASTNAME, FIRSTNAME' format from athenahealth"
+
+      - name: provider
+        data_type: string
+        description: "Scheduling provider in 'LASTNAME, FIRSTNAME' format. May be null
+          for some records."
+
+      - name: department
+        data_type: string
+        description: "Athena department/clinic name where the appointment is located"
+
+      - name: original_appointment_date
+        data_type: date
+        description: >
+          The original appointment date. For reschedules: the cancelled
+          appointment's date. For schedules: the scheduled appointment date. For
+          cancellations: the cancelled appointment date.
+
+      - name: new_appointment_date
+        data_type: date
+        description: >
+          The new appointment date after rescheduling. Only populated for
+          'Rescheduled' action. NULL for Scheduled and Cancelled actions.
+
+      - name: original_start_time
+        data_type: string
+        description: >
+          Original appointment start time. For reschedules: the cancelled slot's
+          time. For schedules/cancellations: the appointment time.
+
+      - name: new_start_time
+        data_type: string
+        description: >
+          New appointment start time after rescheduling. Only populated for
+          'Rescheduled' action. NULL for Scheduled and Cancelled actions.
+
+      - name: duration_minutes
+        data_type: decimal(10,0)
+        description: "Appointment duration in minutes from athenahealth"
+
+      - name: status
+        data_type: string
+        description: >
+          Current athena appointment status code. Common values: f=Filled,
+          2=Checked In, 3=Checked Out, 4=Charge Entered, x=Cancelled.
+
+      - name: cancelled_appointment_id
+        data_type: decimal(10,0)
+        description: >
+          Athena appointment ID of the cancelled slot. Populated for Rescheduled
+          and Cancelled actions. NULL for Scheduled action.
+
+      - name: new_appointment_id
+        data_type: decimal(10,0)
+        description: >
+          Athena appointment ID of the new/active slot. Populated for
+          Rescheduled and Scheduled actions. NULL for Cancelled action.
+
+      - name: activity_id
+        data_type: decimal(10,0)
+        description: >
+          Merge key: coalesce(cancelled_appointment_id, new_appointment_id).
+          Guarantees a UK component for Scheduled and Cancelled branches that
+          null one of the appointment ids. Deploy requires --full-refresh (or
+          drop) when introducing this column onto an existing Delta table.
+        tests:
+          - not_null
+
+      - name: source_updated_at
+        data_type: timestamp
+        description: >
+          CDF-safe source-system watermark — GREATEST(LASTUPDATED) across the
+          appointment row(s) feeding the row (cancel + schedule for reschedules,
+          single appointment for standalone scheduled/cancelled). Drives the
+          model's matched_condition so MERGE only updates when upstream
+          appointment data genuinely advanced — replaces the previous
+          activity_date watermark which was fixed at row creation and could not
+          propagate later status updates.
+
+  - name: vw_provider_departure_tracker
+    description: >
+      Tracks active patient panel reassignment and appointment status after
+      provider departures. One row per departing provider. Source: Salesforce
+      provider departure data joined with Athena appointments.
+    config:
+      contract:
+        enforced: true
+      tags: [ "salesforce", "athena", "cube", "BIPlatform" ]
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: departure_date
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: provider
+        data_type: string
+        description: "Name of the departing provider. Primary key."
+        tests:
+          - unique
+          - not_null
+      - name: departure_date
+        data_type: date
+        description: "Date the provider departed."
+      - name: original_panel
+        data_type: bigint
+        description: "Number of patients on the provider's panel at departure."
+      - name: still_on_panel
+        data_type: bigint
+        description: "Patients still assigned to the departed provider."
+      - name: reassigned
+        data_type: bigint
+        description: "Patients reassigned to another provider."
+      - name: inactive_post_departure
+        data_type: bigint
+        description: "Patients who became inactive after provider departure."
+      - name: seen_by_new_provider
+        data_type: bigint
+        description: "Patients seen by a new provider after departure."
+      - name: needs_reschedule
+        data_type: bigint
+        description: "Patients who need their appointment rescheduled."
+      - name: no_visit
+        data_type: bigint
+        description: "Patients with no visit since provider departure."

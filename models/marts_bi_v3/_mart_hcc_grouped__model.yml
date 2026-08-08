@@ -1,0 +1,280 @@
+version: 2
+
+models:
+  - name: mart_hcc_grouped
+    description: >
+      HCC Assessment mart at HCC grain (one row per patient x HCC) — the canonical HCC-level
+      count source for V3 dashboards. Spine = closure history (int_raf__combined_sources):
+      closed_2025 UNION present_2026, so VendorNav-silent recaptures/suspects (claims-only) are
+      still captured. int_navina__hcc_assessment_grouped is LEFT JOINed for VendorNav display
+      columns (NULL when navina_silent). Two independent axes: CLOSURE (recapture/suspect,
+      driven off combined_sources status='CLOSED') and ASSESSMENT (disposition, from the
+      VendorNav intermediate, ranked ACCEPTED > HELD > REJECTED > NOT ADDRESSED).
+    config:
+      tags: ["marts_bi_v3", "cube", "BIPlatform", "v3_synced"]
+      contract:
+        enforced: true
+    columns:
+      - name: mart_hcc_grouped_id
+        data_type: string
+        description: Surrogate PK = patient_id || '_' || hcc_code. One row per patient x HCC.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        data_type: bigint
+        description: VendorNav/athena patient identifier.
+      - name: hcc_code
+        data_type: string
+        description: HCC code, normalized numeric (leading "HCC" prefix stripped, e.g. '280').
+      - name: npi_id
+        data_type: string
+        description: Assessing provider NPI from the VendorNav grouped intermediate (display only; null when navina_silent).
+      - name: provider_name
+        data_type: string
+        description: Assessing provider name from the VendorNav grouped intermediate (null when navina_silent).
+      - name: department
+        data_type: string
+        description: Clinic/department associated with the VendorNav suggestion (null when navina_silent).
+      - name: mbi
+        data_type: string
+        description: Patient Medicare Beneficiary Identifier (null when navina_silent).
+      - name: insurance_group
+        data_type: string
+        description: Insurance group/plan grouping from the VendorNav intermediate (null when navina_silent).
+      - name: primary_insurance
+        data_type: string
+        description: Raw primary insurance/payer description as recorded by VendorNav (null when navina_silent); source for the derived payer column.
+      - name: payer
+        data_type: string
+        description: >
+          Normalized insurer bucket derived from primary_insurance: Original Medicare, PAYOR_A,
+          Payor Epsilon, Payor_Beta, Medica, Payor Delta, PAYOR_C, UCare, or Other. NULL when
+          primary_insurance is null (navina_silent rows).
+      - name: vbc_ffs
+        data_type: string
+        description: >
+          VBC if payer is one of Original Medicare, Payor_Beta, PAYOR_A, or Payor Epsilon; otherwise
+          FFS. NULL when payer is null.
+      - name: suggestion_type
+        data_type: string
+        description: VendorNav's ICD-level suggestion type rolled to HCC grain (recapture vs. suspect classification, null when navina_silent).
+      - name: suggestion_source
+        data_type: string
+        description: Source system/process that generated the VendorNav suggestion (null when navina_silent).
+      - name: eligibility_segment
+        data_type: string
+        description: Patient eligibility/plan segment from the VendorNav intermediate (null when navina_silent).
+      - name: market
+        data_type: string
+        description: Market/region attribute from the VendorNav intermediate (null when navina_silent).
+      - name: plan_type
+        data_type: string
+        description: Insurance plan type from the VendorNav intermediate (null when navina_silent).
+      - name: hcc_coefficient
+        data_type: double
+        description: RAF coefficient for this HCC code (null when navina_silent).
+      - name: navina_hcc_weight
+        data_type: double
+        description: VendorNav-assigned HCC weight/score used for suggestion prioritization (null when navina_silent).
+      - name: hcc_encounter_date
+        data_type: timestamp
+        description: Date of the VendorNav encounter that drove the HCC suggestion (null when navina_silent).
+      - name: first_surfaced_date
+        data_type: timestamp
+        description: >
+          Earliest 2026 date the HCC was seen: COALESCE(earliest VendorNav suggestion date_of_service,
+          earliest 2026 claim/encounter date_of_service). Populated for claims-only (navina_silent)
+          HCCs too — the claim fallback is scoped to coded_year = 2026.
+      - name: first_winning_assessment_date
+        data_type: timestamp
+        description: >
+          Earliest "win" date: COALESCE(earliest VendorNav winning-status date_of_service — winning
+          = min status_priority under ACCEPTED > HELD > REJECTED > NOT ADDRESSED — earliest 2026
+          CLOSED claim date). NULL when a 2026 suspect is surfaced but not yet captured.
+      - name: icd_code_count
+        data_type: bigint
+        description: Count of distinct ICD-10 codes rolled into this HCC suggestion (null when navina_silent).
+      - name: icd10_codes
+        data_type: array<string>
+        description: List of ICD-10 codes rolled into this HCC suggestion (null when navina_silent).
+      - name: hcc_suggestion_status
+        data_type: string
+        description: Winning VendorNav disposition for this HCC (ACCEPTED > HELD > REJECTED > NOT ADDRESSED). NULL when navina_silent (claims-only, no VendorNav suggestion).
+      - name: is_assessed_hcc
+        data_type: boolean
+        description: VendorNav flag — HCC has been assessed (null when navina_silent).
+      - name: is_gap_hcc
+        data_type: boolean
+        description: VendorNav flag — HCC is an open gap (not addressed, null when navina_silent).
+      - name: is_accepted_hcc
+        data_type: boolean
+        description: VendorNav flag — HCC suggestion accepted (null when navina_silent).
+      - name: accepted_int
+        data_type: int
+        description: 1 if hcc_suggestion_status = 'ACCEPTED', else 0. Aggregation-friendly binary flag.
+      - name: gap_int
+        data_type: int
+        description: 1 if hcc_suggestion_status = 'NOT ADDRESSED', else 0. Aggregation-friendly binary flag.
+      - name: held_int
+        data_type: int
+        description: 1 if hcc_suggestion_status = 'HELD', else 0. Aggregation-friendly binary flag.
+      - name: dismissed_int
+        data_type: int
+        description: 1 if hcc_suggestion_status = 'REJECTED', else 0. Aggregation-friendly binary flag.
+      - name: assessed_int
+        data_type: int
+        description: 1 if is_assessed_hcc is true (coalesced false when null), else 0.
+      - name: one
+        data_type: int
+        description: Constant value 1 on every row — count helper for downstream aggregation/BI tooling.
+      - name: documentation_strength
+        data_type: string
+        description: VendorNav documentation-strength rating for the suggestion (null when navina_silent).
+      - name: is_recapture_candidate
+        data_type: boolean
+        description: VendorNav flag — HCC is a recapture candidate per the VendorNav intermediate (null when navina_silent).
+      - name: has_encounter_diagnosis
+        data_type: boolean
+        description: VendorNav flag — an encounter diagnosis exists supporting the HCC (null when navina_silent).
+      - name: has_claim_diagnosis
+        data_type: boolean
+        description: VendorNav flag — a claim diagnosis exists supporting the HCC (null when navina_silent).
+      - name: has_problem_list_entry
+        data_type: boolean
+        description: VendorNav flag — a problem-list entry exists supporting the HCC (null when navina_silent).
+      - name: last_synced_at
+        data_type: timestamp
+        description: VendorNav source sync watermark for the grouped intermediate row (null when navina_silent).
+      - name: hcc_recapture_status
+        data_type: string
+        description: >
+          Closure-axis status: DONE when closed in both 2025 and 2026, OPEN when closed in 2025
+          but not 2026, NULL when not a 2025 recapture candidate.
+      - name: hcc_is_suspect
+        data_type: boolean
+        description: True when the HCC was not closed in 2025 or 2026 but is present on the 2026 record (new suspect, not a recapture candidate).
+      - name: is_recapture_target
+        data_type: boolean
+        description: True when the HCC had a CLOSED claim/assessment in 2025 (recapture candidate for 2026).
+      - name: is_captured_2026
+        data_type: boolean
+        description: True when the HCC was closed (ACCEPTED or claims CODED) in 2026.
+      - name: claim_closed_adjudicated
+        data_type: boolean
+        description: Verifier column — true when a real claim for this HCC closed/adjudicated in 2026 (int_claim_closed). Advisory proof only, never gates closure.
+      - name: claim_billed
+        data_type: boolean
+        description: Verifier column — true when a real claim for this HCC was billed in 2026 (int_claim_closed). Advisory proof only, never gates closure.
+      - name: first_won_date
+        data_type: timestamp
+        description: Earliest CLOSURE/capture date for this HCC (ACCEPTED status or claims CODED), sourced from the closure spine.
+      - name: earliest_winning_code
+        data_type: string
+        description: ICD-10 diagnosis code that first captured (closed) this HCC.
+      - name: navina_silent
+        data_type: boolean
+        description: True when the HCC has no matching row in the VendorNav grouped intermediate (claims-only HCC, VendorNav never suggested it).
+      - name: silent_source
+        data_type: string
+        description: >
+          'in_navina_gold' when the HCC is present in the VendorNav grouped intermediate; otherwise
+          the top VendorNav removing_reason if VendorNav explicitly removed it from the patient's MRN,
+          else 'athena_claims_only'.
+      - name: recapture_int
+        data_type: int
+        description: 1 when the HCC was closed in both 2025 and 2026 (full recapture), else 0.
+      - name: recapture_open_int
+        data_type: int
+        description: 1 when the HCC was closed in 2025 but not yet closed in 2026 (open recapture), else 0.
+      - name: recapture_candidate_int
+        data_type: int
+        description: 1 when the HCC was closed in 2025 (recapture candidate regardless of 2026 outcome), else 0.
+      - name: suspect_int
+        data_type: int
+        description: 1 when the HCC was not closed in 2025 or 2026 but is present on the 2026 record (new suspect), else 0.
+      - name: captured_int
+        data_type: int
+        description: 1 when the HCC was closed in 2026, else 0.
+      - name: suspect_done_int
+        data_type: int
+        description: 1 when the HCC was captured in 2026 but was not a 2025 recapture candidate (new suspect closed), else 0.
+      - name: suspect_candidate_int
+        data_type: int
+        description: >
+          1 when the HCC is not a recapture candidate (not closed in 2025) AND is either
+          suspect-open (present but not closed in 2026) or suspect-done (closed in 2026), else 0.
+      - name: claim_proven_int
+        data_type: int
+        description: 1 when a real claim for this HCC closed/adjudicated in 2026 (int_claim_closed verifier), else 0.
+      - name: claim_billed_int
+        data_type: int
+        description: 1 when a real claim for this HCC was billed in 2026 (int_claim_closed verifier), else 0.
+      - name: navina_silent_int
+        data_type: int
+        description: 1 when the HCC is navina_silent (claims-only, no VendorNav suggestion), else 0.
+      - name: system_excluded_int
+        data_type: int
+        description: 1 when the HCC is navina_silent (mirrors navina_silent_int; used in system-exclusion aggregations), else 0.
+      - name: actionable_int
+        data_type: int
+        description: 1 when the HCC has a matching VendorNav grouped-intermediate row (actionable in VendorNav), else 0.
+      - name: pending_closed_int
+        data_type: int
+        description: 1 when the HCC was closed in 2026 but has not yet been billed (int_claim_closed verifier), else 0.
+      - name: source_updated_at
+        data_type: timestamp
+        description: ServingDB TRIGGERED-sync watermark — COALESCE(VendorNav intermediate last_synced_at, current_timestamp()).
+      - name: clinic
+        data_type: string
+        description: The patient's clinic, from mart_membership (deduped to one active row per patient). Display dimension; LEFT-joined, never filters the spine.
+      - name: provider
+        data_type: string
+        description: The patient's primary care provider (PCP), from mart_membership. Display dimension; LEFT-joined.
+      - name: assessing_provider
+        data_type: string
+        description: The provider who assessed the HCC in VendorNav (int_navina__hcc_assessment_grouped.provider_name). NULL when navina_silent (never surfaced in VendorNav).
+      - name: assessing_matches_pcp
+        data_type: boolean
+        description: >
+          For a 2026-captured HCC with both provider names present, TRUE when the assessing provider
+          equals the patient's PCP, else FALSE. NULL when not comparable (not 2026-captured, or a name missing).
+      - name: pcp_match_int
+        data_type: int
+        description: 1 when the HCC is 2026-captured AND the assessing provider equals the PCP, else 0.
+      - name: pcp_differs_int
+        data_type: int
+        description: 1 when the HCC is 2026-captured AND the assessing provider differs from the PCP, else 0.
+      - name: pcp_compared_int
+        data_type: int
+        description: 1 when the HCC is 2026-captured AND both provider names are present (the denominator for pcp match/differ rates), else 0.
+      - name: final_status
+        data_type: string
+        description: >
+          VendorNav assessment disposition (hcc_suggestion_status): ACCEPTED / HELD / REJECTED / NOT ADDRESSED.
+          NULL when navina_silent. This is the ASSESSMENT axis (disposition), independent of the closure axis.
+      - name: navina_status
+        data_type: string
+        description: The VendorNav suggestion_type for the HCC (from int_navina__hcc_assessment_grouped). NULL when navina_silent.
+      - name: rejected_int
+        data_type: int
+        description: 1 when final_status = REJECTED, else 0.
+      - name: not_assessed_int
+        data_type: int
+        description: 1 when final_status = NOT ADDRESSED, else 0.
+      - name: claim_closed
+        data_type: int
+        description: 1 when the HCC was closed via an adjudicated 2026 claim (int_claim_closed) — the PAID-closure verifier (lags the CODED capture), else 0.
+      - name: recapture
+        data_type: int
+        description: >
+          OPPORTUNITY-scope Recapture flag — 1 when the HCC was closed in 2025 (f_closed_2025=1), i.e. a recapture
+          candidate/target regardless of 2026 status, else 0. Standalone opportunity count; NEVER a rate denominator.
+          Spans surfaced + navina_silent. (dashboard "HH Recapture" = SUM of this.)
+      - name: suspect
+        data_type: int
+        description: >
+          OPPORTUNITY-scope Suspect flag (= suspect_candidate) — 1 when the HCC is NOT a recapture candidate
+          (f_closed_2025=0) AND has 2026 activity (suspect-open: present-not-closed, OR captured in 2026), else 0.
+          Closure-truth definition (requires a 2026 record). Standalone opportunity count; NEVER a rate denominator.
+          Spans surfaced + navina_silent. (dashboard "HH Suspect" = SUM of this.)

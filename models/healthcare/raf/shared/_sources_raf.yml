@@ -1,0 +1,472 @@
+version: 2
+
+sources:
+  # ============================================
+  # RAF CDC — Self-referencing source for DAG ordering
+  # The prior snapshot table is defined as a source here so that
+  # log_raf__score_events can read it WITHOUT creating a ref()
+  # dependency that would force dbt to rebuild the snapshot first.
+  # ============================================
+  - name: raf_cdc
+    description: "RAF CDC pipeline tables (self-referencing source pattern)"
+    database: databricks_prod
+    schema: healthcare
+    config:
+      freshness: null
+    tables:
+      - name: _log_raf__prior_snapshot
+        description: >
+          Prior-run snapshot of int_raf__scored_hccs used as the baseline
+          for CDC diff in log_raf__score_events. Read as a source (not ref)
+          so dbt does not rebuild it before the diff runs.
+
+  - name: raf_cdc_control
+    description: "RAF CDC control plane tables (watermark, baseline, locks, snapshots)"
+    database: databricks_prod
+    schema: raf_cdc
+    config:
+      freshness: null
+    tables:
+      - name: ref_raf__cdc_watermark
+        description: >
+          Watermark tracking table written by Prefect detect_and_log_score_changes
+          after each CDC pass. Contains run_id, baseline_row_count, event counts,
+          and processed_at timestamp. Used for staleness monitoring.
+      - name: ref_raf__score_baseline
+        description: >
+          Persistent baseline copy of _log_raf__prior_snapshot used by the
+          Prefect-side CDC (detect_and_log_score_changes). Updated only after
+          events are successfully written — crash-safe.
+      - name: ref_raf__pipeline_lock
+        description: >
+          Distributed pipeline lock via Delta MERGE. Fallback for Prefect GCL.
+      - name: ref_raf__run_snapshots
+        description: >
+          Pre-run Delta version snapshots for all RAF tables, enabling
+          precise rollback on pipeline failure.
+
+  # ============================================
+  # RAF Staging (TWICE) source — ERADICATED 2026-06.
+  # Every former raf_staging table was converted to a canonical dbt artifact:
+  #   - patient_status_monthly  -> canonical hist_patient_status_monthly spine
+  #     (via int_patient_status_pit_monthly)
+  #   - patient_enrollment_type -> seed ref_raf__patient_enrollment_segment
+  #   - year_processing_config  -> seed ref_raf__year_processing_config
+  #   - enrollment_type_ref     -> seed ref_raf__enrollment_type
+  #   - test_patient_exclusion_list -> seed ref_raf__test_exclusions
+  #   - all_2024_hcc_billed     -> re-homed to raf_archive source (below)
+  #   - navina_archive_2025     -> re-homed to raf_archive source (below)
+  #   - stg_navina__provider_code_level_live -> read via ref() (it is a dbt model)
+  #   - historical_elation_*    -> dead (disabled model + non-existent table) removed
+  #   - cms_mmr / cms_mao4 / cms_cclf -> stg_cms__* are empty placeholders;
+  #     production MAO = payor int_raf__*mao* (not these CMS stub sources).
+  # NOTE: raf_staging remains a dbt TARGET schema for staging models; only the
+  # SOURCE reads of TWICE-migrated data were eliminated.
+  # ============================================
+
+  # ============================================
+  # RAF Archive - Frozen snapshots for validation
+  # ============================================
+  - name: raf_archive
+    description: "Frozen RAF score snapshots and historical archives for validation"
+    database: databricks_prod
+    schema: raf_archive
+    config:
+      freshness: null
+    tables:
+      - name: old_raf_oct2025
+        description: "Pre-migration RAF scores (Oct 2025 freeze) for delta comparison"
+
+      - name: monthly_raf_snapshots_2025
+        description: "PY2025 monthly RAF snapshots (V20260213 freeze)"
+
+      - name: monthly_raf_snapshots_2026
+        description: "PY2026 monthly RAF snapshots (V20260213 freeze)"
+
+      - name: combined_raf_with_exclusion_snapshot
+        description: "Combined RAF with suggestion exclusions applied"
+
+      - name: suggestion_raf_snapshot
+        description: "VendorNav/suggestion-based RAF scores (frozen)"
+
+      - name: suggestion_raf_exclusion_snapshot
+        description: "Suggestion RAF with exclusions applied (frozen)"
+
+      - name: monthly_raf
+        description: "Core monthly RAF calculations (frozen baseline)"
+
+      - name: monthly_raf_enhanced
+        description: "Enhanced monthly RAF with additional demographic context"
+
+      - name: frozen_2024
+        description: "Immutable PY2024 frozen snapshot from old_raf_oct2025, excluding TUVA. Created 2026-02-15."
+
+      - name: frozen_2025
+        description: "Immutable PY2025 frozen snapshot from monthly_raf_snapshots_2025, excluding TUVA. Created 2026-02-15."
+
+      - name: raf_adjustment_exclusion_snapshots
+        description: "RAF adjustment exclusions materialized snapshot"
+
+      - name: monthly_raf_snapshots_2025_current
+        description: "Live PY2025 snapshots (current, non-frozen)"
+
+      # Immutable pre-migration archives re-homed out of the legacy raf_staging
+      # (TWICE) landing schema during the 2026-06 raf_staging eradication. These
+      # are frozen, non-rebuildable snapshots, so they live in the analytics-owned
+      # raf_archive schema rather than being seeded (they carry patient-level
+      # clinical detail that must not land in git).
+      - name: all_2024_hcc_billed
+        description: "All HCC-relevant diagnoses billed in PY2024 (frozen archive; re-homed from raf_staging)"
+
+      - name: navina_archive_2025
+        description: "VendorNav provider-code-level suggestions archive, 2025 (frozen; re-homed from raf_staging)"
+
+  # ============================================
+  # Athena EHR Source (existing in Databricks)
+  # ============================================
+  - name: athena_raf
+    description: "Athena EHR clinical data used for RAF scoring"
+    database: athenahealth
+    schema: athenaone
+    config:
+      freshness: null
+    tables:
+      - name: patient
+        description: "Athena patient demographics"
+        identifier: patient
+
+      - name: claim
+        description: "Athena claims with diagnosis codes"
+        identifier: claim
+
+      # NOTE: claimdiagnosis table does not exist as a separate table.
+      # Claim diagnosis codes are in DIAGNOSIS1-8 columns on the claim table.
+      # stg_athena__claim_diagnosis.sql unpivots from the claim source.
+
+      - name: department
+        description: "Athena departments"
+        identifier: department
+
+      - name: patientinsurance
+        description: "Patient insurance/payer information"
+        identifier: patientinsurance
+
+      - name: insurancepackage
+        description: "Insurance package reference for payor/plan names"
+        identifier: insurancepackage
+
+      - name: appointment
+        description: "Athena appointment records"
+        identifier: appointment
+
+      - name: appointmenttype
+        description: "Athena appointment type definitions"
+        identifier: appointmenttype
+
+      - name: provider
+        description: "Athena provider demographics"
+        identifier: provider
+
+      - name: customdemographics
+        description: "Athena custom demographic fields"
+        identifier: customdemographics
+
+      - name: chart
+        description: "Athena patient chart records"
+        identifier: chart
+
+      - name: clinicalencounter
+        description: "Athena clinical encounters"
+        identifier: clinicalencounter
+
+      - name: clinicalencounterdxicd10
+        description: "Clinical encounter ICD-10 diagnosis codes"
+        identifier: clinicalencounterdxicd10
+
+      - name: clinicalencounterdiagnosis
+        description: "Clinical encounter diagnoses"
+        identifier: clinicalencounterdiagnosis
+
+      - name: icdcodeall
+        description: "All ICD code definitions"
+        identifier: icdcodeall
+
+      - name: hccicdcodeall
+        description: "HCC to ICD-10 mapping (Athena V28)"
+        identifier: hccicdcodeall
+
+      - name: hcchierarchyexclusion
+        description: "CMS HCC hierarchy exclusion rules (Athena)"
+        identifier: hcchierarchyexclusion
+
+      - name: hcchccinteraction
+        description: "CMS HCC interaction pair definitions (Athena)"
+        identifier: hcchccinteraction
+
+      - name: p4phccdxsuggestion
+        description: "Athena P4P HCC diagnosis suggestions"
+        identifier: p4phccdxsuggestion
+
+      - name: p4phccdxsuggestiondismissal
+        description: "Athena P4P HCC suggestion dismissals"
+        identifier: p4phccdxsuggestiondismissal
+
+      - name: hccdismissalreasoncode
+        description: "HCC dismissal reason code reference"
+        identifier: hccdismissalreasoncode
+
+      - name: claimnote
+        description: "Claim notes"
+        identifier: claimnote
+
+      - name: claimaudit
+        description: "Claim audit trail"
+        identifier: claimaudit
+
+      - name: patientproblem
+        description: "Patient problem list with SNOMED-coded chronic conditions"
+        identifier: patientproblem
+
+      - name: visit
+        description: "Athena billing visit header (patient + check-in date)"
+        identifier: visit
+
+      - name: visitcharge
+        description: "CPT/HCPCS procedure codes billed on a visit"
+        identifier: visitcharge
+
+  # ============================================
+  # Elation EHR (static copy in Databricks)
+  # ============================================
+  - name: elation_raf
+    description: "Historical Elation EHR data (pre-Athena migration). Static copy, no updates."
+    database: elation
+    schema: herself_health
+    config:
+      freshness: null
+    tables:
+      - name: visit_note
+        description: "Elation visit notes (static archive)"
+        identifier: visit_note
+
+      - name: bill
+        description: "Elation billing records with diagnosis codes (static archive)"
+        identifier: bill
+
+  # ============================================
+  # VendorNav V2 Int Tables (Prefect-managed Delta)
+  # Populated by navina_assessment_sync Prefect flow daily at noon CST.
+  # Deprecates Snowflake Healthcare.VendorNav foreign tables.
+  # ============================================
+  - name: navina_int
+    description: >
+      Five VendorNav AI report tables written directly by the navina_assessment_sync
+      Prefect flow into Databricks Delta. Each table receives a full MERGE from
+      the VendorNav REST API daily. Used for HCC assessment, provider contribution,
+      and coder contribution analytics.
+    database: databricks_prod
+    schema: healthcare
+    config:
+      freshness: null
+    tables:
+      - name: int_navina_provider_code_level
+        description: >
+          Most granular provider report. One row per provider + visit + ICD-10 code.
+          Contains the HCC suggestion, provider action (ACCEPTED/REJECTED/HELD/NOT ADDRESSED),
+          and HCC weight. Primary input for gold_navina_raf and HCC assessment dashboard.
+        columns:
+          - name: npi_id
+            description: "Provider NPI number"
+          - name: provider_name
+            description: "Provider display name"
+          - name: department
+            description: "Practice department"
+          - name: dos
+            description: "Date of service (encounter date)"
+          - name: sid
+            description: "VendorNav session/visit identifier (unique per encounter)"
+          - name: emr_appointment_id
+            description: "Athena appointment ID linking to athenahealth.athenaone.appointment"
+          - name: visit_type
+            description: "Appointment type (e.g. Office Visit, AWV)"
+          - name: mrn_id
+            description: "Athena patient ID (MRN)"
+          - name: mbi
+            description: "Medicare Beneficiary Identifier"
+          - name: insurance_group
+            description: "Insurance group classification"
+          - name: primary_insurance
+            description: "Primary insurance plan name"
+          - name: non_primary_insurance
+            description: "Secondary/tertiary insurance"
+          - name: is_reviewed_by_provider
+            description: "Whether the provider reviewed this suggestion"
+          - name: is_reviewed_by_anyone
+            description: "Whether any user reviewed this suggestion"
+          - name: hcc_group
+            description: "CMS HCC category code (e.g. HCC19, HCC85)"
+          - name: hcc_weight
+            description: "VendorNav-calculated HCC coefficient weight"
+          - name: icd_code
+            description: "ICD-10-CM diagnosis code"
+          - name: icd_description
+            description: "ICD-10 code description"
+          - name: action
+            description: "Provider action: ACCEPTED, REJECTED, HELD, NOT ADDRESSED, or NA"
+          - name: is_existing_hcc_group
+            description: "Whether this HCC was already captured in prior year"
+          - name: suggestion_type
+            description: "Type of AI suggestion (e.g. RECAPTURE, SUSPECT)"
+          - name: source
+            description: "Suggestion evidence source (e.g. CLAIMS, EHR, LABS)"
+
+      - name: int_navina_provider_visit_level
+        description: >
+          Provider visit-level summary. One row per visit (SID). Aggregates HCC
+          suggestion counts by action status and review flags. Used for provider
+          review rate and compliance analytics.
+        columns:
+          - name: npi_id
+            description: "Provider NPI number"
+          - name: provider_name
+            description: "Provider display name"
+          - name: department
+            description: "Practice department"
+          - name: dos
+            description: "Date of service"
+          - name: sid
+            description: "VendorNav session/visit identifier"
+          - name: mrn_id
+            description: "Athena patient ID"
+          - name: is_scrubbed
+            description: "Whether this visit was scrubbed by a coder"
+          - name: is_reviewed_by_provider
+            description: "Whether the provider reviewed suggestions for this visit"
+          - name: is_reviewed_by_anyone
+            description: "Whether any user reviewed suggestions"
+          - name: number_of_hcc
+            description: "Total HCC suggestions for this visit"
+          - name: number_of_hcc_accepted
+            description: "HCCs accepted by provider"
+          - name: number_of_hcc_held
+            description: "HCCs held for later review"
+          - name: number_of_hcc_not_addressed
+            description: "HCCs not addressed by provider"
+          - name: number_of_hcc_rejected
+            description: "HCCs rejected by provider"
+
+      - name: int_navina_patient_level
+        description: >
+          Patient-level summary. One row per patient (MRN). Provides estimated
+          RAF score, total HCC gaps, and acceptance/rejection counts across all visits.
+        columns:
+          - name: mrn_id
+            description: "Athena patient ID"
+          - name: mbi
+            description: "Medicare Beneficiary Identifier"
+          - name: provider_name
+            description: "Primary provider name"
+          - name: department_name
+            description: "Primary department"
+          - name: number_of_hcc_accepted
+            description: "Total HCCs accepted across all visits"
+          - name: number_of_hcc_rejected
+            description: "Total HCCs rejected"
+          - name: number_of_hcc_held
+            description: "Total HCCs held"
+          - name: number_of_hcc_not_addressed
+            description: "Total HCCs not addressed"
+          - name: outstanding_hcc_gaps
+            description: "Open HCC gaps remaining"
+          - name: total_hcc_suggested
+            description: "Total HCCs suggested by VendorNav AI"
+          - name: number_of_hcc_addressed
+            description: "Total HCCs with any action taken"
+          - name: estimated_raf_score
+            description: "VendorNav-estimated RAF score for this patient"
+
+      - name: int_navina_coder_visit_level
+        description: >
+          Coder visit-level summary. One row per visit (SID). Tracks which coder
+          scrubbed the visit, scrub date, and auto-generated vs manual code counts.
+          Coder scrubs predate provider review in the workflow.
+        columns:
+          - name: scrubbed_by
+            description: "Coder name who scrubbed this visit"
+          - name: dos
+            description: "Date of service"
+          - name: sid
+            description: "VendorNav session/visit identifier"
+          - name: mrn_id
+            description: "Athena patient ID"
+          - name: provider_name
+            description: "Rendering provider name"
+          - name: department
+            description: "Practice department"
+          - name: npi_id
+            description: "Provider NPI"
+          - name: scrub_date
+            description: "Date the coder completed the scrub"
+          - name: is_reviewed_by_coder
+            description: "Whether a coder reviewed this visit"
+          - name: number_of_icd_autogenerated
+            description: "ICD codes auto-generated by VendorNav AI"
+          - name: number_of_hcc_autogenerated
+            description: "HCC codes auto-generated by AI"
+          - name: number_of_hcc_accepted
+            description: "HCCs accepted during coder scrub"
+          - name: number_of_hcc_rejected
+            description: "HCCs rejected during coder scrub"
+          - name: number_of_hcc_not_addressed
+            description: "HCCs not addressed during scrub"
+          - name: number_of_hcc_added_manually
+            description: "HCCs manually added by coder (not AI-suggested)"
+
+      - name: int_navina_coder_code_level
+        description: >
+          Most granular coder report. One row per coder + visit + ICD-10 code.
+          Contains the coder's action on each individual code, manual additions,
+          and whether the action carried over from a previous visit.
+        columns:
+          - name: coder_name
+            description: "Coder who reviewed this code"
+          - name: dos
+            description: "Date of service"
+          - name: sid
+            description: "VendorNav session/visit identifier"
+          - name: mrn_id
+            description: "Athena patient ID"
+          - name: provider_name
+            description: "Rendering provider"
+          - name: department
+            description: "Practice department"
+          - name: npi_id
+            description: "Provider NPI"
+          - name: scrub_date
+            description: "Date coder completed scrub"
+          - name: is_reviewed_by_coder
+            description: "Whether coder reviewed this code"
+          - name: hcc_group
+            description: "CMS HCC category code"
+          - name: hcc_weight
+            description: "HCC coefficient weight"
+          - name: icd_code
+            description: "ICD-10-CM diagnosis code"
+          - name: icd_description
+            description: "ICD-10 code description"
+          - name: action
+            description: "Coder action: ACCEPTED, REJECTED, NOT ADDRESSED"
+          - name: is_added_manually
+            description: "Whether this code was manually added by coder"
+          - name: last_action_date
+            description: "Date of last action on this code"
+          - name: is_action_from_previous_visit
+            description: "Whether action carried over from a prior visit"
+          - name: is_existing_hcc_group
+            description: "Whether this HCC was previously captured"
+          - name: coder_notes
+            description: "Free-text coder notes"
+          - name: suggestion_type
+            description: "AI suggestion type (RECAPTURE, SUSPECT)"
+          - name: source
+            description: "Evidence source (CLAIMS, EHR, LABS)"

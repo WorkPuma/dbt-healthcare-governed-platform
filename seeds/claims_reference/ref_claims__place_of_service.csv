@@ -1,0 +1,51 @@
+place_of_service_code,place_of_service_name,care_setting
+01,Pharmacy,pharmacy
+02,Telehealth Provided Other than in Patient's Home,telehealth
+03,School,outpatient
+04,Homeless Shelter,outpatient
+05,Indian Health Service Free-standing Facility,outpatient
+06,Indian Health Service Provider-based Facility,outpatient
+07,Tribal 638 Free-standing Facility,outpatient
+08,Tribal 638 Provider-based Facility,outpatient
+09,Prison/Correctional Facility,outpatient
+10,Telehealth Provided in Patient's Home,telehealth
+11,Office,office
+12,Home,home
+13,Assisted Living Facility,home
+14,Group Home,home
+15,Mobile Unit,outpatient
+16,Temporary Lodging,home
+17,Walk-in Retail Health Clinic,outpatient
+18,Place of Employment-Worksite,outpatient
+19,Off Campus-Outpatient Hospital,outpatient
+20,Urgent Care Facility,urgent_care
+21,Inpatient Hospital,inpatient
+22,On Campus-Outpatient Hospital,outpatient
+23,Emergency Room-Hospital,emergency
+24,Ambulatory Surgical Center,ambulatory_surgery
+25,Birthing Center,outpatient
+26,Military Treatment Facility,inpatient
+31,Skilled Nursing Facility,skilled_nursing
+32,Nursing Facility,nursing_facility
+33,Custodial Care Facility,nursing_facility
+34,Hospice,hospice
+41,Ambulance-Land,ambulance
+42,Ambulance-Air or Water,ambulance
+49,Independent Clinic,outpatient
+50,Federally Qualified Health Center,outpatient
+51,Inpatient Psychiatric Facility,inpatient
+52,Psychiatric Facility-Partial Hospitalization,outpatient
+53,Community Mental Health Center,outpatient
+54,Intermediate Care Facility/Individuals with Intellectual Disabilities,nursing_facility
+55,Residential Substance Abuse Treatment Facility,inpatient
+56,Psychiatric Residential Treatment Center,inpatient
+57,Non-residential Substance Abuse Treatment Facility,outpatient
+58,Non-residential Opioid Treatment Facility,outpatient
+60,Mass Immunization Center,outpatient
+61,Comprehensive Inpatient Rehabilitation Facility,inpatient
+62,Comprehensive Outpatient Rehabilitation Facility,outpatient
+65,End-Stage Renal Disease Treatment Facility,outpatient
+71,Public Health Clinic,outpatient
+72,Rural Health Clinic,outpatient
+81,Independent Laboratory,laboratory
+99,Other Place of Service,other

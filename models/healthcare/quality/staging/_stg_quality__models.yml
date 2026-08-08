@@ -1,0 +1,94 @@
+version: 2
+
+# Schema — DEV-4296 evidence funnel · staging layer (quality-specific)
+# stg_quality__patient_demographics / stg_quality__patient_insurance ported as-is from
+# PAYOR_A-quality-v3-port. 1:1 over athenahealth.patient / patientinsurance + payer.
+# Feeds fct_quality__payor_alpha_mn_roster.
+
+models:
+  - name: stg_quality__patient_demographics
+    description: >
+      1:1 over athenahealth.patient — the demographic columns the PAYOR_A contract_output needs
+      (name/dob/gender/race/language/address/city/state/zip) + attributed_provider_id (step D
+      NPI fallback) + is_deceased/deceased_date.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, staging, dev-4296]
+    columns:
+      - name: patient_id
+        description: "PK. Source: athenahealth.patient.patientid."
+        data_tests: [not_null, unique]
+      - name: first_name
+        description: "Patient first name."
+      - name: last_name
+        description: "Patient last name."
+      - name: date_of_birth
+        description: "Patient date of birth."
+      - name: gender
+        description: "Sex, as recorded in athenahealth (source column: sex)."
+      - name: race_primary
+        description: "Primary race, as recorded in athenahealth."
+      - name: preferred_language
+        description: "Patient's preferred language."
+      - name: address_line_1
+        description: "Address line 1."
+      - name: address_line_2
+        description: "Address line 2 (apt/suite; often null)."
+      - name: city
+        description: "City."
+      - name: state
+        description: "State."
+      - name: zip_code
+        description: "ZIP code."
+      - name: attributed_provider_id
+        description: "Attributed provider (source: patient.primaryproviderid) — the step D NPI fallback."
+      - name: primary_department_id
+        description: "Primary department/context id (source: patient.contextid)."
+      - name: enterprise_id
+        description: "Enterprise id (source: patient.enterpriseid)."
+      - name: patient_status
+        description: "Patient status flag as recorded in athenahealth."
+      - name: deceased_date
+        description: "Deceased date, if applicable (source: patient.deceaseddate)."
+      - name: is_deceased
+        description: "Derived boolean — true when deceased_date is not null."
+
+  - name: stg_quality__patient_insurance
+    description: >
+      Patient insurance rows joined to the payer dimension; derives a coarse payor_group bucket
+      (PAYOR_ALPHA_MN / PAYOR_B / MEDICARE / MEDICAID / PAYOR_C / OTHER). Drops rows with a cancellation date.
+      Feeds fct_quality__payor_alpha_mn_roster (insurance_primary_active leg).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, staging, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Patient (source: patientinsurance.patientid). Composite grain with insurance_package_id + sequence_number."
+        data_tests: [not_null]
+      - name: insurance_package_id
+        description: "Insurance package id (source: patientinsurance.insurancepackageid)."
+        data_tests: [not_null]
+      - name: insurance_plan_name
+        description: "Plan name, from the payer dimension (source: payer.insurancepackagename)."
+      - name: insurance_reporting_category
+        description: "Payer reporting category, used to derive payor_group (source: payer.insurancereportingcategory)."
+      - name: irc_group
+        description: "IRC group (source: payer.ircgroup)."
+      - name: product_type
+        description: "Insurance product type (source: payer.insuranceproducttype)."
+      - name: sequence_number
+        description: "Coverage sequence number (primary/secondary/etc; source: patientinsurance.sequencenumber)."
+      - name: member_id
+        description: "Member/policy id number (source: patientinsurance.policyidnumber)."
+      - name: group_number
+        description: "Policy group number (source: patientinsurance.policygroupnumber)."
+      - name: effective_date
+        description: "Coverage effective/issue date (source: patientinsurance.issuedate)."
+      - name: expiration_date
+        description: "Coverage expiration date (source: patientinsurance.expirationdate)."
+      - name: cancellation_date
+        description: "Coverage cancellation date. Rows with a non-null value are dropped by this model's WHERE clause."
+      - name: payor_group
+        description: >
+          Derived coarse payer bucket (PAYOR_ALPHA_MN / PAYOR_B / MEDICARE / MEDICAID / PAYOR_C / OTHER),
+          classified from insurance_reporting_category text patterns.

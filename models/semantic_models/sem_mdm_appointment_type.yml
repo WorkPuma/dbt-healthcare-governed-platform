@@ -1,0 +1,11 @@
+version: 2
+
+metrics:
+  - name: review_completion_rate
+    description: "Percentage of appointment types that have been reviewed"
+    type: derived
+    label: "Review Completion %"
+    expr: "reviewed_type_count * 100.0 / nullif(total_appointment_type_count, 0)"
+    input_metrics:
+      - name: reviewed_type_count
+      - name: total_appointment_type_count

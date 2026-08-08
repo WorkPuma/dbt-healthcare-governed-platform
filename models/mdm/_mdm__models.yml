@@ -1,0 +1,274 @@
+version: 2
+
+models:
+  - name: sync_mdm_patient
+    description: >
+      Incremental MERGE into mdm.reference_data.patient. Replaces the standalone
+      MDM Patient Sync job. Joins Athena patient demographics with Salesforce
+      appointment counts and EMPI golden IDs via the dbt-managed v_patient_sync
+      model (sources/mdm/v_patient_sync.sql).
+
+      All Athena patients (NEWPATIENTID IS NULL) flow through MDM so EMPI
+      matching, Salesforce identity linkage, and golden-record resolution
+      continue to work for MIDI / dept-10 / dept-11 patients. Dept-based
+      exclusion is applied as a STATUS (computed_status='Excluded') by
+      sync_mdm_patient_status, not as a row deletion.
+
+      A post_hook DELETE auto-removes rows whose key has fallen out of
+      v_patient_sync (test patients flipped on, NEWPATIENTID merges, hard-
+      deleted Athena patients) — anti-MERGE cleanup, so the MERGE-doesn't-delete
+      drift is handled in-place rather than just warned about.
+
+      computed_status / status_reason are written by sync_mdm_patient_status
+      (separate model) using the canonical 10-priority logic from
+      int_patient_status_computed. This ensures the MDM patient table reflects
+      the same active-patient definition as the rest of the data model.
+    config:
+      tags: [ "mdm", "sync", "patient" ]
+    tests:
+      # Anti-MERGE drift detector. The post_hook DELETE in sync_mdm_patient
+      # should keep this at 0; the test is retained as a regression guard.
+      - no_filter_drift:
+          arguments:
+            key_column: patient_id
+            source_model: v_patient_sync
+          config:
+            severity: warn
+            tags: [ "elementary", "filter_drift", "data_quality", "mdm" ]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_status
+        description: "Current Athena patient status (a/i/p/d). Feeds
+          int_patient_status_computed."
+      - name: golden_id
+        description: "EMPI Golden Record ID for cross-system identity resolution"
+      - name: athena_enterprise_id
+        description: "Athena Enterprise ID for multi-practice identification"
+      - name: salesforce_account_id
+        description: "Linked Salesforce Account ID"
+      - name: last_updated_at
+        description: "Timestamp of last sync"
+
+  - name: sync_mdm_patient_status
+    description: >
+      Aligns mdm.reference_data.patient.{computed_status, status_reason} with
+      the canonical 10-priority active-patient definition from
+      int_patient_status_computed. Materializes as a thin staging view; the
+      actual write is a post_hook UPDATE-only MERGE into the MDM patient table.
+      Closes the gap left by the legacy Databricks v_patient_sync view, which
+      embedded an outdated CASE block and was historically the only thing
+      populating these two columns.
+
+      Runs after sync_mdm_patient (transitive dependency via
+      int_patient_status_computed -> stg_mdm__patient -> sync_mdm_patient).
+    config:
+      tags: [ "mdm", "sync", "patient", "status" ]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: computed_status
+        description: >
+          Canonical patient status: Active, Inactive, Prospect, Excluded,
+          Deleted (chart removed), or Deceased. Source:
+          int_patient_status_computed.
+      - name: status_reason
+        description: >
+          Reason code for computed_status (e.g., 'Completed Visit Within 18
+          Months', 'Prospect - Future Scheduled, No Completed Visit Yet',
+          'Excluded - Past Appointments Only, No Future Scheduled', '18-Month
+          Inactivity Rule'). Source: int_patient_status_computed.
+
+  - name: sync_mdm_insurance
+    description: >
+      Incremental MERGE into mdm.reference_data.insurance. Replaces the
+      standalone MDM Insurance Sync job. Preserves hand-curated
+      Government_Insurance values when source is NULL (COALESCE pattern).
+      Source: v_insurance_sync view.
+    config:
+      tags: [ "mdm", "sync", "insurance" ]
+    columns:
+      - name: insurance_package_id
+        description: "Athena Insurance Package ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: irc_group
+        description: "Insurance Reporting Category group"
+      - name: government_funded_type
+        description: "Government funded type (Medicare, Medicaid, etc.)"
+      - name: Government_Insurance
+        description: "Government insurance flag — preserved via COALESCE on update"
+
+  - name: sync_mdm_provider
+    description: >
+      Incremental MERGE into mdm.reference_data.provider. Replaces the
+      standalone MDM Provider Sync job. Assigns clinic by plurality of future
+      30-day appointment slots; providers with <10 slots marked Inactive.
+      Source: v_provider_sync view.
+    config:
+      tags: [ "mdm", "sync", "provider" ]
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: assigned_clinic
+        description: "Clinic with the most future slots in next 30 days"
+      - name: is_active
+        description: "Active if provider has >= 10 slots in next 30 days"
+      - name: future_visit_count_30d
+        description: "Total future appointment slots in next 30 days"
+      - name: provider_group_name
+        description: "Athena Provider Group name (e.g., 'MN Primary Care', 'MIDI').
+          Sourced from athenahealth.athenaone.providergroup via
+          v_provider_sync."
+      - name: BH_Provider
+        description: "Provider is a Behavioral Health provider (LICSW, Psychologist,
+          etc.). Manually curated."
+
+  - name: int_staff_athena_crosswalk
+    description: >
+      Maps a staff work email -> Athena username(s) by joining
+      athenahealth.athenaone.userprofile on lowercased email. Resolves the
+      array of every active (non-deleted) USERNAME per email plus a
+      primary_athena_username (most-recent login). No patient data — not
+      subject to MDM clinical compliance rules. Grain: one row per email.
+    config:
+      tags: [ "mdm", "staff", "athena" ]
+    columns:
+      - name: email
+        description: "Lowercased staff email (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: athena_usernames
+        description: "Array of all active Athena USERNAMEs for this email."
+      - name: primary_athena_username
+        description: "Most-recently-used Athena USERNAME for this email."
+
+  - name: v_staff_sync
+    description: >
+      Unified staff master feed for sync_mdm_staff. Combines Entra/BackendBaaS
+      mdm_staff (identity + org + curated cross-system IDs), TriNet HRIS
+      (employment: hire/term/status/FTE — ALL statuses kept so terminated staff
+      persist), and int_staff_athena_crosswalk (Athena username by email).
+      Keyed on lowercased work email. Materialized as a staging view.
+    config:
+      tags: [ "mdm", "staff", "sync" ]
+    columns:
+      - name: staff_email
+        description: "Lowercased work email — the cross-system join key (PK)."
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: is_active
+        description: "Entra active AND not terminated per TriNet; TriNet-only rows
+          derive from employee_status."
+
+  - name: sync_mdm_staff
+    description: >
+      Incremental MERGE into mdm.reference_data.staff — the governed,
+      change-aware Healthcare Org roster. dbt promotion of the staff identity
+      crosswalk that previously lived only in the BackendBaaS mdm_staff view, with
+      two key additions: the Athena username crosswalk is resolved in dbt (email
+      join to userprofile), and terminated staff are retained (is_active=false,
+      termination_date set) so Athena-username-keyed historical attribution
+      resolves (Salesforce-keyed attribution for terminated staff is not
+      covered — salesforce_id is Entra-sourced, active-only). MERGE updates
+      only when last_updated_at is newer; rows are never deleted.
+      Source: v_staff_sync. Grain: one row per staff_email.
+    config:
+      tags: [ "mdm", "sync", "staff" ]
+    columns:
+      - name: staff_email
+        description: "Lowercased work email (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: primary_athena_username
+        description: "Representative Athena login for the staff member (nullable)."
+      - name: athena_usernames
+        description: "Array of all Athena USERNAMEs for the staff member."
+      - name: salesforce_id
+        description: "Salesforce User Id — joins to Case.OwnerId."
+      - name: is_active
+        description: "False once terminated per TriNet; otherwise Entra active flag."
+      - name: termination_date
+        description: "TriNet termination date (nullable). Drives is_active."
+
+  - name: stg_mdm__staff
+    description: >
+      Thin pass-through over the governed MDM staff table (sync_mdm_staff).
+      Reads ref('sync_mdm_staff') directly so the DAG is self-contained and
+      does not require the physical mdm.reference_data.staff table to pre-exist
+      in the dev deep-clone. Terminated staff are retained.
+    config:
+      tags: [ "mdm", "staff", "reference" ]
+    columns:
+      - name: staff_email
+        description: "Lowercased work email (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+  - name: dim_staff_athena
+    description: >
+      One row per (staff member x Athena username) — explodes the
+      athena_usernames array from stg_mdm__staff so Athena actor columns
+      (document ASSIGNEDTO/CREATEDBY, appointment SCHEDULEDBY) can be matched
+      to a staff member. General attribution surface superseding the RN-only
+      dim_rn_staff_athena. Includes terminated staff.
+    config:
+      tags: [ "mdm", "staff", "dimension", "athena" ]
+    columns:
+      - name: athena_username
+        description: "A single Athena USERNAME owned by the staff member."
+        constraints:
+          - type: not_null
+      - name: staff_email
+        description: "Lowercased work email of the owning staff member."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - staff_email
+              - athena_username
+
+  - name: sync_mdm_appointment_type
+    description: >
+      Incremental MERGE into mdm.reference_data.appointment_type. Replaces the
+      standalone MDM Appointment Type Daily Refresh job. Preserves hand-curated
+      classification flags (AWV_Visit, Patient_Visit, etc.) via
+      merge_exclude_columns. Source: Athena appointmenttype joined with
+      appointment counts.
+    config:
+      tags: [ "mdm", "sync", "appointment_type" ]
+    columns:
+      - name: appointment_type_id
+        description: "Athena Appointment Type ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: appointment_type_name
+        description: "Appointment type display name"
+      - name: duration
+        description: "Default appointment duration in minutes"
+      - name: appointment_count
+        description: "Total appointments of this type (historical)"

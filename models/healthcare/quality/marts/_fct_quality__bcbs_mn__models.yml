@@ -1,0 +1,325 @@
+version: 2
+
+# Schema — DEV-4296 PAYOR_A-MN mart layer.
+# Roster -> mart-layer submission (thin promotion of the sidecar) -> demographics -> the
+# 29-column contract_output deliverable, plus the gap_evidence super-sidecar. Mirrors the shape
+# of _int_quality__payor_gamma__models.yml but for the PAYOR_A-MN payer marts (Constitution Q1: payer
+# predicates live at the per-payor mart layer).
+
+models:
+  - name: fct_quality__payor_alpha_mn_contract_output
+    description: >
+      THE 29-column PAYOR_A-MN deliverable. Maps PAYOR_A submission evidence
+      (fct_quality__payor_alpha_mn_submission) + demographics
+      (fct_quality__payor_alpha_mn_submission_demographics) to PAYOR_A-MN's exact pipe-delimited
+      supplemental-file contract. The actual file write (.txt + .ctl) is a separate Python
+      step (export_payor_alpha_submission.py) that reads this mart — dbt produces the DATA, the
+      script writes the FILE. Column order is the contract — do not reorder.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, marts, PAYOR_A, dev-4296]
+    columns:
+      - name: PATIENTID
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: FILE_TRANSFER_DTTM
+        description: "Timestamp this row was generated (current_timestamp(), formatted 'yyyy-MM-dd HH:mm:ss')."
+      - name: CARE_SYSTEM_NAME
+        description: "Always 'Healthcare Org'."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Healthcare Org']
+      - name: CLINIC_NAME
+        description: "Clinic name from demographics; defaults to 'Healthcare Org' when missing."
+      - name: NPI_NBR
+        description: "Primary-care provider NPI, joined from athenahealth.athenaone.provider by the patient's primaryproviderid; empty string if none found."
+      - name: FIRST_NM
+        description: "First name from demographics; empty string if missing."
+      - name: LAST_NM
+        description: "Last name from demographics; empty string if missing."
+      - name: BRTH_DT
+        description: "Date of birth from demographics, formatted 'yyyy-MM-dd'; empty string if missing."
+      - name: MBR_ID
+        description: "PAYOR_A-MN member/policy ID from demographics; empty string if missing."
+      - name: GENDER
+        description: "Gender from demographics; empty string if missing."
+      - name: GRP_NBR
+        description: "PAYOR_A-MN policy group number from demographics; empty string if missing."
+      - name: RACE01
+        description: "CDC race code from demographics (cdc_race_code); empty string if missing."
+      - name: RACE02
+        description: "Always empty string (OLD only ever populates RACE01)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['']
+      - name: RACE03
+        description: "Always empty string (OLD only ever populates RACE01)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['']
+      - name: RACE04
+        description: "Always empty string (OLD only ever populates RACE01)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['']
+      - name: RACE05
+        description: "Always empty string (OLD only ever populates RACE01)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['']
+      - name: PREF_LANG
+        description: "Preferred language from demographics; empty string if missing."
+      - name: PREF_ADDR_LN_1_TXT
+        description: "Address line 1 from demographics; empty string if missing."
+      - name: PREF_ADDR_LN_2_TXT
+        description: "Address line 2 from demographics; empty string if missing."
+      - name: PREF_CITY_NM
+        description: "City from demographics; empty string if missing."
+      - name: PREF_STPRV_CD
+        description: "State from demographics; empty string if missing."
+      - name: PREF_ZIP_CD
+        description: "Zip code from demographics; empty string if missing."
+      - name: COV_STRT_DT
+        description: "PAYOR_A-MN coverage start date from demographics, formatted 'yyyy-MM-dd'; empty string if missing."
+      - name: COV_END_DT
+        description: "PAYOR_A-MN coverage end date from demographics, formatted 'yyyy-MM-dd'; empty string if missing."
+      - name: DATE_OF_SERVICE
+        description: "Date of service of the shipped evidence row, formatted 'yyyy-MM-dd'; empty string if missing."
+      - name: MEASURE_TYPE
+        description: "PAYOR_A measure_type, passed through unchanged from the submission mart (V3's internal measure_type names ARE the PAYOR_A names)."
+        data_tests: [not_null]
+      - name: RESULT
+        description: "Result value from the submission mart, cast to string; empty string if null."
+      - name: CODE_TYPE
+        description: "Code vocab; blank for BLOOD_PRESSURE% measures, CPT_II/CPT_III collapsed to 'CPT', else passed through unchanged."
+      - name: CODE
+        description: "Accepted code shipped for this measure; blank for BLOOD_PRESSURE% measures (result-only, no code)."
+      - name: measurement_year
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+
+  - name: fct_quality__payor_alpha_mn_gap_evidence
+    description: >
+      The PAYOR_A gap layer (super-sidecar) — every PAYOR_A-eligible (patient x measure) in the
+      denominator that did NOT close with a submittable code. Built on the eligibility-gated
+      denominator int_quality__measure_evidence_summary, filtered to payer PAYOR_ALPHA_MN/PAYOR_A-MN
+      with closure_tier <> 'CODED_NATIVE' (a submittable code means it ships in the submission
+      file instead). Feeds payor_alpha_qa_gaps.csv (counts per source/reason) and
+      payor_alpha_detailed_gaps.csv (per-patient gap rows + demographics) via the python writer.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, marts, PAYOR_A, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure_type
+        data_tests: [not_null]
+      - name: is_payor_alpha_mn_member
+        description: "Always true — the upstream denominator is already PAYOR_A-roster-scoped."
+      - name: measurement_year
+      - name: evidence_source
+        description: "= upstream closure_tier (the gap class), excluding CODED_NATIVE: OPEN_GAP (eligible, no evidence), QM_MET_NO_CODE (QM-satisfied but no submittable code), POSSIBLE_CLOSURE, or VALUE_ONLY (partial signal)."
+      - name: payor_alpha_gap_reason
+        description: "Upstream gap_reason human-readable explanation text."
+      - name: athena_quality_satisfied
+      - name: has_code
+      - name: has_value
+      - name: is_excluded
+      - name: code
+        description: "Raw code, if any, carried from the upstream denominator — not necessarily PAYOR_A-accepted (that's what makes this row a gap)."
+      - name: code_type
+      - name: exclusion_reason
+      - name: evidence_date
+        description: "coalesce(code_date_of_service, value_date_of_service) from the upstream denominator."
+      - name: raw_code
+        description: "Duplicate of `code`, kept for parity with the OLD gap_evidence output shape."
+      - name: raw_code_system
+        description: "Duplicate of `code_type`, kept for parity with the OLD gap_evidence output shape."
+      - name: source_record_id
+        description: "Always NULL — no source-record linkage in the V3-native denominator (OLD's federation-heavy source_record_id is not carried)."
+      - name: first_name
+        description: "From demographics; empty string if missing (left join)."
+      - name: last_name
+        description: "From demographics; empty string if missing (left join)."
+      - name: date_of_birth
+        description: "From demographics; null if the patient has no demographics row."
+      - name: gender
+        description: "From demographics; empty string if missing (left join)."
+      - name: member_id
+        description: "From demographics; empty string if missing (left join)."
+      - name: coverage_start_date
+        description: "From demographics; null if the patient has no demographics row."
+      - name: coverage_end_date
+        description: "From demographics; null if the patient has no demographics row."
+
+  - name: fct_quality__payor_alpha_mn_roster
+    description: >
+      Unified PAYOR_A-MN patient roster for the measurement year: A ∪ C, where A = MDM roster
+      (membership_monthly_snapshot with primary_payor ILIKE 'PAYOR_A-MN%', unioned with
+      int_attribution_point_in_time where roster_payor ILIKE '%PAYOR_A%' and is_active_patient)
+      and C = stg_quality__patient_insurance with payor_group='PAYOR_ALPHA_MN', sequence_number=1,
+      coverage overlapping the measurement year. MDM-compliant (D1/D2): inner-joined to
+      mdm's canonical patient table (deleted_yn='N', test_patient_yn='N'). Grain: one row per
+      patient_id.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, marts, PAYOR_A, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(patient_id as string))."
+        data_tests: [not_null, unique]
+      - name: is_mdm_membership
+        description: "True if the patient appears in the MDM membership_monthly_snapshot leg (A)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_mdm_attribution
+        description: "True if the patient appears in the MDM int_attribution_point_in_time leg (A)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_insurance_primary_active
+        description: "True if the patient appears in the primary-active PAYOR_A-MN insurance leg (C)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: roster_tier
+        description: "'A_AND_C' = both an MDM source and active PAYOR_A-MN insurance; 'A_ONLY' = an MDM source only; 'C_ONLY' = insurance-only, not in any MDM source."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['A_AND_C', 'A_ONLY', 'C_ONLY']
+      - name: measurement_year
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+      - name: generated_at
+        description: "current_timestamp() at model build time."
+
+  - name: fct_quality__payor_alpha_mn_submission
+    description: >
+      Promotes the PAYOR_A payer-sidecar evidence (int_quality__payor_alpha_submission) to the mart
+      layer — a thin pass-through (no new logic) so the mart DAG matches OLD
+      (fct_quality__payor_alpha_mn_submission) and the file-writer / QA scripts have a stable mart to
+      query. One row per shipped (patient x measure x code x date_of_service).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, marts, PAYOR_A, dev-4296]
+    columns:
+      - name: patient_id
+        data_tests: [not_null]
+      - name: measure_type
+        data_tests: [not_null]
+      - name: code
+        description: "Accepted code shipped for this measure; NULL for result-only measures (e.g. blood pressure)."
+      - name: code_type
+      - name: date_of_service
+        data_tests: [not_null]
+      - name: code_origin
+      - name: order_status
+        description: "Always 'submittable' — filtered upstream in the sidecar (int_quality__payor_alpha_submission)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['submittable']
+      - name: evidence_provenance
+      - name: col_method
+        description: "Colorectal-screening modality; populated only for COLScr rows."
+      - name: send_strategy
+        description: "How PAYOR_A wants this measure shipped — ALL (every accepted-code row), MOST_RECENT (rank-1 latest), or BEST_EVIDENCE (rank-1, latest as v1 proxy); sourced from ref_measure_code_mapping, defaults to 'MOST_RECENT'."
+      - name: lookback_months
+        description: "HEDIS lookback window carried through from the payer-agnostic funnel."
+      - name: expiration_date
+        description: "HEDIS expiration_date carried through as an additive attribute; PAYOR_A does not discard on it."
+      - name: create_date
+      - name: result_value
+        description: "Numeric/text result; required (non-null) for result-driven measures (HbA1c/eGFR/uACR/BP/PHQ9/GAD7/AlcoholScr/LDL), otherwise those rows are excluded upstream."
+      - name: measurement_year
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+                quote: false
+
+  - name: fct_quality__payor_alpha_mn_submission_demographics
+    description: >
+      V3 port of the demographic half of PAYOR_A-MN's 29-column supplemental submission file
+      (columns 1-23: identity, clinic, race, language, address, coverage). Columns 24-29
+      (DATE_OF_SERVICE, MEASURE_TYPE, RESULT, CODE_TYPE, CODE, FILE_TRANSFER_DTTM) are stamped
+      at evidence-join or file-write time, not here. Identity/gender from
+      mdm.reference_data.patient (MDM-compliant, D1/D2); race/language/address from
+      athenahealth.athenaone.patient; PAYOR_A-MN insurance from patientinsurance joined to payer
+      (insurancereportingcategory='PAYOR_A-MN', dedup sequencenumber asc / issuedate desc);
+      clinic/PCP from the most-recent measurement-year membership_monthly_snapshot row.
+      Grain: one row per patient_id.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, marts, PAYOR_A, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null, unique]
+      - name: care_system_name
+        description: "Always NULL placeholder — not in the V3 membership view; 'Healthcare Org' is stamped at the contract_output layer."
+      - name: clinic_name
+        description: "Clinic from the most-recent measurement-year membership_monthly_snapshot row; empty string if missing."
+      - name: npi_nbr
+        description: "Always NULL placeholder — provider NPI not on the membership snapshot; wired from athenahealth.athenaone.provider at the contract_output layer."
+      - name: first_name
+        description: "From mdm.reference_data.patient; empty string if missing."
+      - name: last_name
+        description: "From mdm.reference_data.patient; empty string if missing."
+      - name: date_of_birth
+        description: "From mdm.reference_data.patient, formatted 'yyyy-MM-dd'; empty string if missing."
+      - name: member_id
+        description: "PAYOR_A-MN policy/member ID (policyidnumber), rank-1 by sequencenumber asc then issuedate desc; empty string if none found."
+      - name: gender
+        description: "'F'/'M' normalized from mdm.reference_data.patient's gender_raw; passed through unchanged for any other value."
+      - name: group_number
+        description: "PAYOR_A-MN policy group number (policygroupnumber), rank-1 with member_id; empty string if none found."
+      - name: cdc_race_code
+        description: "PAYOR_A CDC numeric race code, pivoted from athenahealth.athenaone.patient.race text label."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['1', '2', '3', '4', '5', '6', '7', '97', '98']
+      - name: preferred_language
+        description: "From athenahealth.athenaone.patient; empty string if missing."
+      - name: address_line_1
+        description: "From athenahealth.athenaone.patient; empty string if missing."
+      - name: address_line_2
+        description: "From athenahealth.athenaone.patient; empty string if missing."
+      - name: city
+        description: "From athenahealth.athenaone.patient; empty string if missing."
+      - name: state
+        description: "From athenahealth.athenaone.patient; empty string if missing."
+      - name: zip_code
+        description: "First 5 characters of athenahealth.athenaone.patient.zip; empty string if missing."
+      - name: coverage_start_date
+        description: "PAYOR_A-MN policy issuedate, rank-1 with member_id; formatted 'yyyy-MM-dd', empty string if none found."
+      - name: coverage_end_date
+        description: "PAYOR_A-MN policy expirationdate, rank-1 with member_id; formatted 'yyyy-MM-dd', empty string if none found."

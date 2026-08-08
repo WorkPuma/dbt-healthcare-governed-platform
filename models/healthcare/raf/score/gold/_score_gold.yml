@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: gold_combined_raf
+    config:
+      tags:
+        - raf
+        - gold
+    description: >
+      Master combined RAF view. One row per patient + HCC + diagnosis + coded year + source system.
+      Consolidates Athena P4P, VendorNav AI, archive billed, and pending claims with CMS HCC V28
+      coefficients and demographic factors.
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: hcc_code
+        description: CMS Hierarchical Condition Category (HCC) code.
+        tests: [not_null]
+      - name: diagnosis_code
+        description: "ICD-10 diagnosis code. NULL for Athena HCC-only suggestions where no specific ICD was linked."
+      - name: coded_year
+        description: Diagnosis coding / DOS year for scoring (lens-specific when from run windows).
+        tests: [not_null]
+      - name: source_system
+        description: Source membership/status file type (e.g. MMR, MOR).
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - hcc_code
+              - diagnosis_code
+              - coded_year
+              - source_system
+
+  - name: gold_demographic_raf
+    config:
+      tags:
+        - raf
+        - gold
+    description: >
+      Demographic-only RAF score per patient per payment year.
+      Every attributed patient gets a score based on age, sex, and eligibility segment.
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: payment_year
+        description: CMS payment/settlement year for this row.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - payment_year
+

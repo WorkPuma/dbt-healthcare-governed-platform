@@ -1,0 +1,56 @@
+diagnostic_category,hcc_code,cms_label
+CANCER_V28,17,"Cancer Metastatic to Lung, Liver, Brain, and Other Organs"
+CANCER_V28,18,"Cancer Metastatic to Bone, Other and Unspecified Metastatic Cancer"
+CANCER_V28,19,"Myelodysplastic Syndromes, Multiple Myeloma, and Other Cancers"
+CANCER_V28,20,Lung and Other Severe Cancers
+CANCER_V28,21,Lymphoma and Other Cancers
+CANCER_V28,22,"Bladder, Colorectal, and Other Cancers"
+CANCER_V28,23,"Prostate, Breast, and Other Cancers and Tumors"
+DIABETES_V28,35,Pancreas Transplant Status
+DIABETES_V28,36,Diabetes with Severe Acute Complications
+DIABETES_V28,37,Diabetes with Chronic Complications
+DIABETES_V28,38,"Diabetes with Glycemic, Unspecified, or No Complications"
+CARD_RESP_FAIL,211,Cardiorespiratory Failure/Cardio-Respiratory Shock
+CARD_RESP_FAIL,212,Acute Myocardial Infarction
+CARD_RESP_FAIL,213,Unstable Angina and Other Acute Ischemic Heart Disease
+HF_V28,221,Heart Transplant Status/Complications
+HF_V28,222,Heart Failure with Heart Assist Device/Artificial Heart
+HF_V28,223,"Heart Failure, End Stage"
+HF_V28,224,"Heart Failure, Acute on Chronic Systolic (Congestive)"
+HF_V28,225,"Heart Failure, Acute Systolic (Congestive)"
+HF_V28,226,"Heart Failure, Except End Stage and Acute"
+CHR_LUNG_V28,276,Cystic Fibrosis
+CHR_LUNG_V28,277,Chronic Obstructive Pulmonary Disease
+CHR_LUNG_V28,278,Severe Asthma
+CHR_LUNG_V28,279,Asthma/Wheezing/Bronchospasm and Other COPD
+CHR_LUNG_V28,280,Fibrosis of Lung and Other Chronic Lung Disorders
+KIDNEY_V28,326,"Chronic Kidney Disease, Stage 5"
+KIDNEY_V28,327,"Chronic Kidney Disease, Stage 4"
+KIDNEY_V28,328,"Chronic Kidney Disease, Stage 3"
+KIDNEY_V28,329,"Chronic Kidney Disease, Unspecified"
+SEPSIS,2,"Septicemia, Sepsis, Systemic Inflammatory Response Syndrome/Shock"
+gSubUseDisorder_V28,135,Drug Use with Psychotic Complications
+gSubUseDisorder_V28,136,Alcohol Use with Psychotic Complications
+gSubUseDisorder_V28,137,"Drug Use Disorder, Moderate/Severe, or Drug Use with Non-Psychotic Complications"
+gSubUseDisorder_V28,138,"Alcohol Use Disorder, Moderate/Severe, or Alcohol Use with Specified Non-Psychotic Complications"
+gSubUseDisorder_V28,139,"Alcohol Use Disorder/Drug Use Disorder, Mild, Uncomplicated"
+gPsychiatric_V28,151,"Schizophrenia, Schizoaffective, and Other Specified Psychotic Disorders"
+gPsychiatric_V28,152,Bipolar Disorders
+gPsychiatric_V28,153,"Reactive and Unspecified Psychosis, Delusional Disorders"
+gPsychiatric_V28,154,Major Depressive Disorder
+gPsychiatric_V28,155,"Anxiety, Phobic, and Other Specified Disorders"
+NEURO_V28,180,"Quadriplegia, Complete"
+NEURO_V28,181,"Quadriplegia, Incomplete/Unspecified"
+NEURO_V28,182,"Paraplegia, Tetraplegia"
+NEURO_V28,190,Multiple Sclerosis
+NEURO_V28,191,Parkinson and Huntington Diseases
+NEURO_V28,192,Seizure Disorders and Convulsions
+NEURO_V28,195,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+NEURO_V28,196,Muscular Dystrophy
+NEURO_V28,198,ALS and Other Motor Neuron Disease
+NEURO_V28,199,"Cerebral Palsy, Non-Infant/Child"
+ULCER_V28,379,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/or Bone
+ULCER_V28,380,Pressure Ulcer of Skin with Full Thickness Skin Loss
+ULCER_V28,381,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+ULCER_V28,382,"Chronic Ulcer of Skin, Except Pressure, Through to Bone or Muscle"
+HCC238,238,Specified Heart Arrhythmias

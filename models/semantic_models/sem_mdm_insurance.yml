@@ -1,0 +1,20 @@
+version: 2
+
+metrics:
+  - name: commercial_percentage
+    description: "Percentage of packages that are Commercial"
+    type: derived
+    label: "Commercial %"
+    expr: "commercial_package_count * 100.0 / nullif(total_insurance_package_count, 0)"
+    input_metrics:
+      - name: commercial_package_count
+      - name: total_insurance_package_count
+
+  - name: medicare_percentage
+    description: "Percentage of packages that are any Medicare (OM + MA + Supplement)"
+    type: derived
+    label: "Medicare %"
+    expr: "all_medicare_package_count * 100.0 / nullif(total_insurance_package_count, 0)"
+    input_metrics:
+      - name: all_medicare_package_count
+      - name: total_insurance_package_count

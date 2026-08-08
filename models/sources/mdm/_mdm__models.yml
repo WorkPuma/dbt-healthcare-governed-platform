@@ -1,0 +1,536 @@
+version: 2
+
+models:
+  - name: stg_mdm__provider
+    description: |
+      Staged MDM provider reference data enriched with TriNet HR data and Salesforce Contact linkage.
+
+      Master Data Management - Provider Reference semantic model.
+      Contains provider classification flags and hierarchy definitions.
+
+      Classification Definitions:
+      - is_physician: Medical doctors (MD, DO) who can bill independently
+      - is_mid_level: NPs, PAs who work under physician supervision
+      - is_ancillary_staff: Support staff (MA, RN, etc.) - typically excluded from provider metrics
+      - is_non_provider: Administrative staff - excluded by default
+
+      Primary use cases:
+      - Provider directory
+      - Staffing analytics
+      - Provider classification lookups
+      - Capacity planning by provider type
+
+    semantic_model:
+      enabled: true
+      name: stg_mdm_provider
+
+    agg_time_dimension: hire_date
+
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+        entity:
+          type: primary
+          name: provider
+
+      - name: salesforce_contact_id
+        description: "Salesforce Contact ID matched by NPI. NULL indicates provider
+          needs a Contact record created in Salesforce."
+        entity:
+          type: foreign
+          name: salesforce_contact
+
+      - name: hire_date
+        granularity: day
+        dimension:
+          type: time
+
+      - name: termination_date
+        granularity: day
+        dimension:
+          type: time
+
+      - name: last_updated_at
+        description: "Last sync timestamp"
+        granularity: day
+        dimension:
+          type: time
+
+      - name: provider_name
+        description: "Full provider name"
+        dimension:
+          type: categorical
+
+      - name: npi
+        description: "National Provider Identifier"
+        dimension:
+          type: categorical
+
+      - name: credentials
+        description: "Provider credentials (MD, DO, NP, PA, etc.)"
+        dimension:
+          type: categorical
+
+      - name: provider_type
+        description: "Provider type classification"
+        dimension:
+          type: categorical
+
+      - name: specialty
+        dimension:
+          type: categorical
+
+      - name: alias
+        description: "Provider alias/nickname for display"
+        dimension:
+          type: categorical
+
+      - name: is_physician
+        description: "Flag indicating provider is a physician"
+        dimension:
+          type: categorical
+
+      - name: is_mid_level
+        description: "Boolean flag: Is this provider a mid-level (NP/PA)?"
+        dimension:
+          type: categorical
+
+      - name: is_ancillary_staff
+        description: "Boolean flag: Is this provider ancillary staff?"
+        dimension:
+          type: categorical
+
+      - name: is_active
+        dimension:
+          type: categorical
+
+      - name: provider_group_name
+        description: "Athena Provider Group name (e.g., 'MN Primary Care', 'MIDI')"
+
+      - name: assigned_clinic
+        description: "Clinic assignment based on patient visits"
+        dimension:
+          type: categorical
+
+      - name: source_system
+        dimension:
+          type: categorical
+
+      - name: future_visit_count_30d
+        description: "Count of future visits/slots in next 30 days"
+
+    metrics:
+      - name: total_provider_count
+        type: simple
+        label: "Total Providers"
+        description: "Total active providers in the organization"
+        agg: count_distinct
+        expr: provider_id
+
+      - name: total_physicians
+        type: simple
+        label: "Physicians"
+        description: "Total physicians (MD, DO)"
+        agg: count_distinct
+        expr: "case when is_physician = true then provider_id end"
+
+      - name: total_mid_levels
+        type: simple
+        label: "Mid-Levels"
+        description: "Total mid-level providers (NP, PA)"
+        agg: count_distinct
+        expr: "case when is_mid_level = true then provider_id end"
+
+      - name: total_ancillary
+        type: simple
+        label: "Ancillary Staff"
+        description: "Total ancillary staff"
+        agg: count_distinct
+        expr: "case when is_ancillary_staff = true then provider_id end"
+
+      - name: active_providers
+        type: simple
+        description: "Count of currently active providers"
+        agg: count_distinct
+        expr: "case when is_active = true then provider_id end"
+
+      - name: providers_by_clinic
+        type: simple
+        description: "Count for clinic distribution analysis"
+        agg: count_distinct
+        expr: provider_id
+
+      - name: total_future_visits_30d
+        type: simple
+        description: "Sum of future visits across all providers (30-day)"
+        agg: sum
+        expr: future_visit_count_30d
+
+      - name: avg_provider_30d_visits
+        type: simple
+        label: "Avg 30-Day Visits"
+        description: "Average scheduled visits per provider (30-day)"
+        agg: average
+        expr: future_visit_count_30d
+
+  - name: stg_mdm__patient
+    description: "Staged MDM patient reference data with Salesforce appointment
+      counts and EMPI golden IDs"
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: salesforce_account_id
+        description: "Linked Salesforce Account ID"
+      - name: golden_id
+        description: "EMPI Golden Record ID for identity resolution"
+      - name: in_salesforce
+        description: "Flag indicating patient exists in Salesforce"
+      - name: completed_appointment_count
+        description: "Number of completed appointments (from Salesforce)"
+      - name: future_appointment_count
+        description: "Number of future appointments (from Salesforce)"
+      - name: cancelled_appointment_count
+        description: "Number of cancelled appointments (from Salesforce)"
+      - name: total_appointment_count
+        description: "Total number of appointments (from Salesforce)"
+      - name: athena_enterprise_id
+        description: "Athena Enterprise ID for multi-practice identification"
+
+  - name: stg_mdm__appointment_type
+    description: |
+      Staged MDM appointment type reference data.
+
+      Master Data Management - Appointment Type Reference semantic model.
+      Contains appointment classification flags and visit type definitions.
+
+      Classification Definitions:
+      - is_patient_visit: Direct patient care appointments (used for capacity metrics)
+      - is_awv_visit: Annual Wellness Visit appointments (Medicare quality)
+      - is_telehealth_visit: Virtual/telehealth appointments
+      - is_behavioral_health_visit: Mental health appointments (separate capacity)
+      - is_ancillary_visit: Lab, imaging, etc. (typically excluded from provider metrics)
+
+      Review Status:
+      - 'Reviewed': Approved for use in analytics
+      - 'Pending': Needs classification review
+      - 'Inactive': Deprecated appointment type
+
+      Primary use cases:
+      - Appointment type directory
+      - Visit classification lookups
+      - Scheduling analytics by visit type
+      - Capacity planning
+
+    semantic_model:
+      enabled: true
+      name: stg_mdm_appointment_type
+
+    agg_time_dimension: last_updated_at
+
+    columns:
+      - name: appointment_type_id
+        description: "Athena Appointment Type ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+        entity:
+          type: primary
+          name: appointment_type
+
+      - name: department_id
+        entity:
+          type: foreign
+          name: department
+
+      - name: last_updated_at
+        description: "Last sync timestamp"
+        granularity: day
+        dimension:
+          type: time
+
+      - name: appointment_type_name
+        dimension:
+          type: categorical
+
+      - name: appointment_type_short_name
+        dimension:
+          type: categorical
+
+      - name: description
+        dimension:
+          type: categorical
+
+      - name: duration
+        dimension:
+          type: categorical
+          name: duration_minutes
+
+      - name: review_status
+        description: "Review status: Reviewed, Pending, Inactive"
+        dimension:
+          type: categorical
+
+      - name: is_patient_visit
+        description: "Flag indicating patient-facing visit"
+        dimension:
+          type: categorical
+
+      - name: is_awv_visit
+        description: "Flag indicating AWV visit type"
+        dimension:
+          type: categorical
+
+      - name: is_telehealth_visit
+        description: "Flag indicating telehealth visit"
+        dimension:
+          type: categorical
+
+      - name: is_behavioral_health_visit
+        description: "Flag: Is this a behavioral health appointment type?"
+        dimension:
+          type: categorical
+
+      - name: is_ancillary_visit
+        description: "Flag: Is this an ancillary appointment type?"
+        dimension:
+          type: categorical
+
+      - name: web_schedulable_yn
+        description: "Flag: Can patients schedule this online?"
+        dimension:
+          type: categorical
+          name: is_web_schedulable
+
+      - name: source_system
+        dimension:
+          type: categorical
+
+      - name: appointment_count
+        description: "Historical appointment volume for this type"
+
+    metrics:
+      - name: total_appointment_type_count
+        type: simple
+        label: "Total Types"
+        description: "Total count of appointment types"
+        agg: count_distinct
+        expr: appointment_type_id
+
+      - name: patient_visit_type_count
+        type: simple
+        label: "Patient Visit Types"
+        description: "Count of patient visit appointment types"
+        agg: count_distinct
+        expr: "case when is_patient_visit = true then appointment_type_id end"
+
+      - name: awv_type_count
+        type: simple
+        label: "AWV Types"
+        description: "Count of AWV appointment types"
+        agg: count_distinct
+        expr: "case when is_awv_visit = true then appointment_type_id end"
+
+      - name: telehealth_type_count
+        type: simple
+        label: "Telehealth Types"
+        description: "Count of telehealth appointment types"
+        agg: count_distinct
+        expr: "case when is_telehealth_visit = true then appointment_type_id end"
+
+      - name: behavioral_health_types
+        type: simple
+        description: "Count of behavioral health appointment types"
+        agg: count_distinct
+        expr: "case when is_behavioral_health_visit = true then appointment_type_id end"
+
+      - name: ancillary_types
+        type: simple
+        description: "Count of ancillary appointment types"
+        agg: count_distinct
+        expr: "case when is_ancillary_visit = true then appointment_type_id end"
+
+      - name: reviewed_type_count
+        type: simple
+        label: "Reviewed Types"
+        description: "Count of reviewed/approved appointment types"
+        agg: count_distinct
+        expr: "case when review_status = 'Reviewed' then appointment_type_id end"
+
+      - name: pending_review_count
+        type: simple
+        label: "Pending Review"
+        description: "Count of appointment types pending review"
+        agg: count_distinct
+        expr: "case when review_status = 'Pending' or review_status is null then
+          appointment_type_id end"
+
+      - name: web_schedulable_types
+        type: simple
+        description: "Count of web-schedulable appointment types"
+        agg: count_distinct
+        expr: "case when web_schedulable_yn = 'Y' then appointment_type_id end"
+
+      - name: historical_appointment_volume
+        type: simple
+        label: "Historical Volume"
+        description: "Total historical appointments across all types"
+        agg: sum
+        expr: appointment_count
+
+      - name: avg_appointment_type_duration
+        type: simple
+        label: "Avg Type Duration (min)"
+        description: "Average configured duration for appointment types (in minutes)"
+        agg: average
+        expr: duration
+
+  - name: stg_mdm__insurance
+    description: >
+      Staged MDM insurance reference data. Filters out deleted records. Source:
+      mdm.reference_data.insurance (synced from Athena insurance tables). Key
+      classification fields are Athena-managed and self-maintaining:
+      government_funded_type, insurance_product_type, irc_group.
+    columns:
+      - name: insurance_package_id
+        description: "Athena Insurance Package ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: insurance_package_name
+        description: "Insurance package display name from Athena"
+      - name: insurance_product_type_id
+        description: "Athena insurance product type ID (FK to insuranceproducttype)"
+      - name: insurance_product_type
+        description: >
+          Insurance product type from Athena. Key values: Medicare
+          B-Traditional, Medicare PPO, Medicare HMO, Medicare Private FFS,
+          Medicare Supplemental Plan, Medicaid HMO, Medicaid-Traditional, PPO,
+          HMO, POS, EPO, INDEMNITY, OTHER.
+      - name: payer_name
+        description: "Raw payer/carrier name from Athena PAYER table (often includes
+          product details in parentheses)"
+      - name: insurance_reporting_category
+        description: "Athena insurance reporting category. ~150 distinct values. Used to
+          derive payor_brand and payor_type in insurance_plans dimension."
+      - name: insurance_type
+        description: "Athena insurance type code. Values: Medicare Part B, GP, SP,
+          Commercial, Medicaid, PP, HM, Other."
+      - name: irc_group
+        description: "Insurance Reporting Category group. Values: Commercial, Blue,
+          Medicare, Medicaid, Self-Pay. Derived from
+          insurance_reporting_category grouping in Athena."
+      - name: government_funded_type
+        description: >
+          Government funding classification from Athena. Values: Medicare (FFS),
+          Medicare Replacement/Advantage (managed Medicare), Medicaid, Medicaid
+          Replacement, TRICARE, CHAMPVA, or NULL (commercial/self-pay). This is
+          the authoritative source for Medicare vs Medicare Advantage
+          classification.
+      - name: Government_Insurance
+        description: "Boolean flag for government-funded insurance. True for BOTH
+          Medicare and Medicaid. Use government_funded_type to distinguish."
+      - name: status
+        description: "Insurance package status (Active, Inactive, etc.)"
+      - name: patient_insurance_count
+        description: "Count of active patient insurance records linked to this package"
+      - name: source_system
+        description: "Origin system (Athena)"
+      - name: last_updated_at
+        description: "Last sync timestamp"
+
+  - name: v_patient_sync
+    description: |
+      Patient sync view (dbt-managed) — replaces the legacy Databricks-side
+      view mdm.reference_data.v_patient_sync. Joins Athena patient
+      demographics, Salesforce appointment-rollup fields, and EMPI golden
+      IDs. ALL Athena patients flow through (no dept filter) so EMPI
+      matching and identity linkage continue to work for MIDI / dept-10
+      / dept-11 patients. Dept-based exclusion is applied downstream as a
+      STATUS via sync_mdm_patient_status: int_patient_status_computed
+      filters appointments by is_core_department(), so a MIDI-only or
+      Vaccine-Clinic-only patient resolves to computed_status='Excluded'
+      automatically. computed_status / status_reason are intentionally
+      NULL in this view; they are written by sync_mdm_patient_status from
+      int_patient_status_computed (the canonical 10-priority active-
+      patient definition).
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: salesforce_account_id
+        description: "Linked Salesforce Account ID (NULL if patient not linked)"
+      - name: in_salesforce
+        description: "True if a Salesforce PersonAccount exists for this patient_id"
+      - name: golden_id
+        description: "EMPI golden record ID (primary ATHENA source mapping)"
+      - name: athena_enterprise_id
+        description: "Athena Enterprise ID for multi-practice identification"
+      - name: completed_number
+        description: "Completed appointment count (Salesforce rollup)"
+      - name: future_number
+        description: "Future appointment count (Salesforce rollup)"
+      - name: cancelled_number
+        description: "Cancelled appointment count (Salesforce rollup)"
+      - name: total_number
+        description: "Total appointment count (Salesforce rollup)"
+      - name: days_since_last_completed_visit
+        description: "Days since last completed visit (Salesforce formula field)"
+      - name: last_completed_visit_date
+        description: "Last completed visit date (Salesforce formula field)"
+
+  - name: stg_mdm__nurse_staff
+    description: >
+      TCM nursing team roster (Laura Kahlbaugh org). Resolves valid nurse case
+      owners for ADT validity gating in re-tiering and TCM models. Join key to
+      Salesforce Case.OwnerId is salesforce_id.
+      **Grain:** One row per salesforce_id (one nurse per row).
+    config:
+      tags: ["mdm", "staff", "nurse", "reference"]
+    columns:
+      - name: salesforce_id
+        description: "Salesforce User ID for the nurse (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+          - not_null
+
+  - name: v_provider_sync
+    description: |
+      Provider sync view that calculates assigned clinic from future appointment slots
+      and links to Salesforce Contact records by NPI.
+      Uses plurality of future 30-day slots to determine clinic assignment.
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: provider_name
+        description: "Full provider name in Title Case"
+      - name: salesforce_contact_id
+        description: "Salesforce Contact ID matched by NPI (Type = Provider, not
+          deleted). NULL if no matching Contact exists."
+      - name: assigned_clinic
+        description: "Clinic assignment based on plurality of future slots (or
+          'Inactive' if < 10 slots)"
+      - name: future_visit_count_30d
+        description: "Count of future visits/slots in next 30 days"
+      - name: provider_group_id
+        description: "Athena Provider Group ID (e.g., 1 = MN Primary Care, 21 = MIDI)"
+      - name: provider_group_name
+        description: "Athena Provider Group name (e.g., 'MN Primary Care', 'MIDI')"

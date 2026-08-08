@@ -1,0 +1,2872 @@
+version: 2
+
+sources:
+  # ============================================
+  # Salesforce Source - CRM and Patient Data
+  # ============================================
+  - name: salesforce
+    description: "Salesforce CRM data synced via Databricks LakeFlow Connect"
+    database: databricks_prod
+    schema: salesforce
+    config:
+      loaded_at_field: "SystemModstamp"
+      freshness:
+        warn_after: { count: 24, period: hour }
+        error_after: { count: 72, period: hour }
+    tables:
+      - name: account
+        description: "Patient and provider accounts from Salesforce"
+        columns:
+          - name: Id
+            description: "Salesforce Account ID (Primary Key)"
+            tests:
+              - unique:
+                  config:
+                    where: "__END_AT IS NULL AND IsDeleted = false"
+              - not_null:
+                  config:
+                    where: "__END_AT IS NULL AND IsDeleted = false"
+          - name: HealthCloudGA__SourceSystemId__c
+            description: "Athena Patient ID (for patient accounts)"
+
+      - name: attribution__c
+        description: "Attribution records for value-based care tracking"
+        columns:
+          - name: Id
+            description: "Attribution record ID"
+            tests:
+              # uniqueness is asserted one layer down on base_salesforce__attribution
+              # (current-row grain). The raw source carries SCD Type 2 version rows
+              # once Lakeflow change tracking is enabled, so unique does not hold here.
+              - not_null
+
+      - name: attribution__history
+        description:
+          "Attribution__c field change history (Salesforce Attribution__History
+          object). Tracks Status__c / Attribution_Stage__c / Hold_Reason__c and
+          related field edits for value-based care operational reporting."
+        config:
+          loaded_at_field: "CreatedDate"
+
+      - name: appointment__c
+        description:
+          "Appointment records synced from Athena (STREAMING_TABLE — not
+          ServingDB-syncable)"
+        columns:
+          - name: Id
+            description: "Salesforce Appointment ID"
+            tests:
+              # uniqueness is asserted one layer down on base_salesforce__appointment
+              # (current-row grain). The raw source carries SCD Type 2 version rows
+              # once Lakeflow change tracking is enabled, so unique does not hold here.
+              - not_null
+
+      - name: ai_outreach_call__c
+        description: "AI_Outreach AI call records synced from Salesforce. Each row
+          represents one completed call attempt within a AI_Outreach sequence."
+        config:
+          freshness:
+            warn_after: { count: 72, period: hour }
+            # dbt-fusion partial-merge does not honor error_after: null when the
+            # parent source config sets an explicit error_after. Use an effectively
+            # infinite value (30 days) to suppress error events for this naturally
+            # bursty source (calls can be quiet for days between campaigns).
+            error_after: { count: 720, period: hour }
+        columns:
+          - name: Id
+            description: "Salesforce AI_Outreach Call record ID"
+            tests:
+              - unique
+              - not_null
+
+      - name: communication_timeline__c
+        description: >
+          Unified patient communication event log (phone/SMS/email) written by
+          Apex CommunicationTimelineService and Prefect communication_timeline_sync
+          (NICE, SmsProvider, Marketing Cloud, Athena, Teams). Used by Patient
+          Engagement Score event fact.
+        config:
+          loaded_at_field: "SystemModstamp"
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 168, period: hour }
+        columns:
+          - name: Id
+            description: "Salesforce Communication Timeline record ID"
+            tests:
+              - not_null
+          - name: Account__c
+            description: "Related Salesforce Account (patient)"
+          - name: Direction__c
+            description: "Inbound or Outbound"
+          - name: Event_Type__c
+            description: "Call/SMS/Email event class"
+          - name: Source_System__c
+            description: "NICE, SmsProvider, Marketing Cloud, Athena, Teams, Salesforce"
+          - name: Event_Date__c
+            description: "Event timestamp"
+
+      - name: user
+        description: "Salesforce user records"
+        config:
+          # Evidence (DEV-4549): median SystemModstamp gap ~14h, p95 ~141h, max 180h.
+          # Slow-changing dim — widen warn so quiet weeks don't page.
+          freshness:
+            warn_after: { count: 336, period: hour }  # ~14d
+            # dbt-fusion partial-merge does not honor error_after: null when the
+            # parent source config sets an explicit error_after. Use an effectively
+            # infinite value (30 days) — User records change very rarely (only on
+            # new hires / role changes) so multi-day staleness is not an outage.
+            error_after: { count: 720, period: hour }
+
+      - name: accounthistory
+        description: "Account field change history"
+        config:
+          loaded_at_field: "CreatedDate"
+
+      - name: lead
+        description: "Salesforce Lead records for membership program"
+        columns:
+          - name: Id
+            description: "Salesforce Lead ID"
+            tests:
+              - unique
+              - not_null
+
+      - name: contact
+        description: "Salesforce Contact records (includes providers)"
+        config:
+          # Evidence (DEV-4549): median gap ~4h, p95 ~26h — source-default 24h warn flaps.
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 96, period: hour }
+        columns:
+          - name: Id
+            description: "Salesforce Contact ID"
+            tests:
+              - unique
+              - not_null
+
+      - name: location
+        description: "Salesforce Location records (HealthCloudGA__Location__c)
+          representing clinic/department sites"
+        config:
+          freshness: null
+
+      - name: case
+        description: "Salesforce Case records for scheduling and care management"
+        columns:
+          - name: Id
+            description: "Salesforce Case ID"
+            tests:
+              - unique
+              - not_null
+
+      - name: clinicalencounter
+        description:
+          "Salesforce HealthCloudGA__EhrClinicalEncounter__c — hospital
+          encounters from ADT feeds (PointClickCare, PatientPing). Category =
+          'Inpatient Encounter' for TCM."
+        config:
+          # Evidence (DEV-4549): median gap ~8h, p95 ~24h — source-default 24h warn flaps.
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 96, period: hour }
+        columns:
+          - name: Id
+            description: "Salesforce Clinical Encounter ID (Primary Key)"
+            tests:
+              - unique
+              - not_null
+
+  # ============================================
+  # AthenaHealth Source - Delta Lake Replica (Analytics, Lower Cost)
+  # ============================================
+  - name: athenahealth
+    description:
+      "AthenaHealth EHR data - Local Delta Lake replica (preferred for
+      analytics)"
+    database: athenahealth
+    schema: athenaone
+    tables:
+      - name: appointment
+        description: |
+          Athena appointment records (athenahealth.athenaone.appointment). Includes appointment
+          stage, patient, provider, and claim data. Double-booked slots appear multiple times
+          (each has unique Appointment ID). Point Values = practice-administered weighting.
+          Delta Lake replica for analytics. See athena.metadata.transformation_tables.
+        config:
+          loaded_at_field: "lastupdated"
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 168, period: hour }
+        columns:
+          - name: appointmentid
+            description: "Athena-assigned ID for appointment slot; unique per CONTEXT_ID"
+          - name: appointmentdate
+            description: "Day of the appointment (local to practice timezone)"
+          - name: appointmentstatus
+            description:
+              "f=Filled, 2=Checked In, 3=Checked Out, 4=Charge Entered,
+              x=Cancelled, o=Open Slot"
+          - name: patientid
+            description: "Patient on which service was performed
+              (athenahealth.athenaone.patient)"
+          - name: providerid
+            description: "Scheduling provider (athenahealth.athenaone.provider)"
+          - name: departmentid
+            description:
+              "Department including CMS codes, provider/department group
+              (athenahealth.athenaone.department)"
+          - name: appointmenttypeid
+            description:
+              "Appointment type - defined and administered by practice
+              (athenahealth.athenaone.appointmenttype)"
+
+      - name: appointmenttype
+        description: |
+          Appointment type reference (athenahealth.athenaone.appointmenttype). Types are
+          defined and administered by individual practices. Used with MDM for Patient_Visit,
+          AWV_Visit, Behavioral_Health_Visit classifications.
+        columns:
+          - name: appointmenttypeid
+            description: "Appointment type ID - practice-specific"
+          - name: appointmenttypename
+            description:
+              "Appointment type name (e.g., Routine Visit, Annual Wellness
+              Visit)"
+
+      - name: appointmentview
+        description: |
+          Appointment view with extended scheduling fields (athenahealth.athenaone.appointmentview).
+          Contains requirescancellationyn flag for mass-freeze cancellation tracking.
+          Joined via parentappointmentid to appointment.appointmentid.
+        columns:
+          - name: parentappointmentid
+            description: "Parent appointment ID (FK to appointment.appointmentid)"
+          - name: requirescancellationyn
+            description:
+              "Y/N flag indicating appointment is marked for cancellation
+              (mass-freeze workflow)"
+
+      - name: procedurecodereference
+        description: |
+          Procedure code (CPT/HCPCS) reference (athenahealth.athenaone.procedurecodereference).
+          One row per procedure code per context; carries DESCRIPTION / COMMONDESCRIPTION,
+          TYPEOFSERVICE, RVU, and EM/status flags. Athena is licensed for the AMA CPT
+          descriptor set, so deriving ref_claims__procedure_code from here keeps us inside
+          our license boundary (no AMA-CPT seed to vendor). Latest, non-deleted context wins.
+        columns:
+          - name: procedurecode
+            description: "CPT/HCPCS procedure code"
+          - name: description
+            description: "Full procedure description"
+          - name: commondescription
+            description: "Shorter, common-use description"
+          - name: typeofservice
+            description: "Athena type-of-service classification"
+
+      - name: department
+        description: |
+          Department data (athenahealth.athenaone.department). Includes CMS codes, provider
+          group and/or department group. Join to mdm.reference_data.location for Patient_Department.
+        columns:
+          - name: departmentid
+            description: "Athena-assigned department ID (Primary Key)"
+          - name: departmentname
+            description: "Department/clinic name"
+
+      - name: provider
+        description: |
+          Provider data (athenahealth.athenaone.provider). Join to mdm.reference_data.provider
+          for Physician flag, assigned_clinic, Non_Provider. PROVIDERTYPE/PROVIDERTYPENAME
+          indicate physician vs non-physician.
+        columns:
+          - name: providerid
+            description: "Athena-assigned provider ID (Primary Key)"
+          - name: providerfirstname
+            description: "Provider first name"
+          - name: providerlastname
+            description: "Provider last name"
+      - name: providerenrollmentstatus
+        description: |
+          Provider payer enrollment status (athenahealth.athenaone.providerenrollmentstatus).
+          Tracks per-provider, per-payer credentialing enrollment. EFFECTIVEDATEDATETIME is
+          the credentialing effective date; EXPIRATIONDATEDATETIME is the expiration. Used
+          to derive hire_date for MIDI providers via the earliest payer enrollment date.
+        columns:
+          - name: providerenrollmentstatusid
+            description: "Primary key for provider enrollment status record"
+          - name: providerid
+            description: "Athena provider ID (FK to provider.providerid)"
+          - name: enrollmentcategoryid
+            description: "Payer enrollment category (FK to enrollmentcategory)"
+          - name: effectivedatedatetime
+            description: "Credentialing enrollment effective date"
+          - name: expirationdatedatetime
+            description: "Credentialing enrollment expiration date"
+          - name: billingokyn
+            description: "Y/N flag indicating billing is approved for this enrollment"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+      - name: patient
+        description: |
+          Patient demographic data (athenahealth.athenaone.patient). Includes race, language,
+          ethnicity, guardian/guarantor, privacy notice delivery, signatures/consents.
+          TESTPATIENTYN='Y' excludes test patients. CURRENTDEPARTMENTID = active department.
+        config:
+          loaded_at_field: "lastupdated"
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 168, period: hour }
+        columns:
+          - name: patientid
+            description: "Athena-assigned patient ID (Primary Key)"
+          - name: currentdepartmentid
+            description: "Patient's current department assignment"
+
+      - name: patientinsurance
+        description: |
+          Patient insurance data (athenahealth.athenaone.patientinsurance). Includes
+          expiration, employer, and insurance package for patient policy. Sequencenumber
+          1=primary. Join to insurancepackage for payor name; join to mdm.insurance for IRC.
+        columns:
+          - name: patientid
+            description: "Athena Patient ID - patient on which policy is assigned"
+          - name: sequencenumber
+            description: "Insurance sequence (1=primary, 2=secondary, etc.)"
+          - name: insurancepackageid
+            description: "Reference to athenahealth.athenaone.insurancepackage"
+
+      - name: pcautomatedmessagelog
+        description: |
+          Athena Patient Communicator automated outbound message log
+          (athenahealth.athenaone.pcautomatedmessagelog). One row per outbound
+          appointment-related call/text/voicemail attempt sent by the Athena
+          Patient Communicator (PMQ). Used by reminder reachability and
+          engagement-history models.
+        columns:
+          - name: appointmentid
+            description:
+              "Athena appointment ID the message is associated with (FK to
+              appointment.appointmentid)"
+          - name: calltimedatetime
+            description: "Time the outbound call/message was placed"
+          - name: createddatetime
+            description: "Row creation timestamp"
+          - name: keypress
+            description: "Patient IVR keypress response ('1' = confirm)"
+          - name: pmqresultcode
+            description:
+              "PMQ result code (SUCCESS, NOTIFICATIONSUCCESS, NOANSWER, BUSY,
+              FAILED, INVALID, VOICEMAIL, NOTIFICATIONFAILED, etc.)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: referralauthorization
+        description: |
+          Prior authorization and referral data (athenahealth.athenaone.referralauthorization).
+          Includes status, start date, expiration date, and visits approved/left.
+        columns:
+          - name: referralauthid
+            description: "Primary key for referral authorization"
+          - name: patientinsuranceid
+            description: "Foreign key to patientinsurance"
+
+      - name: insurancepackage
+        description: |
+          Insurance package reference (athenahealth.athenaone.insurancepackage). Payor and
+          plan data. Map to mdm.reference_data.insurance for irc_group, government_funded_type.
+        columns:
+          - name: insurancepackageid
+            description: "Insurance package ID (Primary Key)"
+          - name: name
+            description: "Insurance package / payor name"
+
+      - name: claim
+        description: |
+          Athena claims (athenahealth.athenaone.claim). Links to appointments via
+          CLAIMAPPOINTMENTID. Contains claim-level primary and secondary insurance
+          (CLAIMPRIMARYPATIENTINSID, CLAIMSECONDARYPATIENTINSID) which represent what
+          was actually billed. Join to patientinsurance for insurance details.
+        config:
+          # DEV-4549: claimcreateddatetime is create-time and misses claim updates.
+          # LASTUPDATED exists on athenaone.claim; measured median update gap ~1h,
+          # max observed gap ~80h — pad warn past that tail.
+          loaded_at_field: "lastupdated"
+          freshness:
+            warn_after: { count: 96, period: hour }
+            error_after: { count: 168, period: hour }
+        columns:
+          - name: claimid
+            description: "Athena claim ID (Primary Key)"
+          - name: claimappointmentid
+            description: "Appointment this claim was generated from"
+          - name: claimprimarypatientinsid
+            description: "Primary patient insurance ID on the claim (FK to
+              patientinsurance)"
+          - name: claimsecondarypatientinsid
+            description: "Secondary patient insurance ID on the claim (FK to
+              patientinsurance)"
+          - name: claimcreateddatetime
+            description: "When the claim was created"
+          - name: claimservicedate
+            description: "Date of service for the claim"
+
+      - name: eligibilitytrack
+        description: |
+          Athena eligibility verification records (athenahealth.athenaone.eligibilitytrack).
+          Tracks real-time eligibility checks per appointment. PATIENTINSURANCEID is the
+          insurance verified. Join to patientinsurance for insurance details.
+          DELETEDDATETIME IS NULL = active records.
+        columns:
+          - name: eligibilitytrackid
+            description: "Eligibility track record ID (Primary Key)"
+          - name: appointmentid
+            description: "Appointment this eligibility check applies to"
+          - name: patientinsuranceid
+            description: "Patient insurance ID that was verified (FK to patientinsurance)"
+          - name: insurancepackageid
+            description: "Insurance package that was checked"
+          - name: eligibleresult
+            description: "Result of eligibility check"
+          - name: createddatetime
+            description: "When the eligibility check was performed"
+          - name: deleteddatetime
+            description: "Soft delete timestamp (NULL = active)"
+
+      - name: transaction
+        description: "Athena billing transactions (Delta Lake replica)"
+
+      - name: document
+        description: "Athena document records (Delta Lake replica)"
+        columns:
+          - name: documentid
+            description: "Document ID (Primary Key)"
+
+      - name: documentaction
+        description: |
+          Athena document action audit trail (athenahealth.athenaone.documentaction).
+          One row per action taken on a document (assign, reply, approve, deny,
+          close, route, etc.). Drives the RN inbox productivity models. ASSIGNEDTO
+          is the bucket/user the action routed to; DOCUMENTACTIONREASONID joins to
+          documentactionreason for the routing rule. DELETEDDATETIME IS NULL = active.
+        columns:
+          - name: documentactionid
+            description: "Document action ID (Primary Key)"
+          - name: documentid
+            description: "Document the action was taken on (FK to document.documentid)"
+          - name: documentactionreasonid
+            description: "Routing reason / rule applied (FK to documentactionreason)"
+          - name: assignedto
+            description: "Bucket or user the action assigned/routed the document to"
+          - name: actiongroup
+            description: "Action group label (e.g. Approve, Deny, Close)"
+          - name: action
+            description: "Action label within the action group"
+          - name: createdby
+            description: "Username (or system principal) that performed the action"
+          - name: createddatetime
+            description: "When the action occurred (Athena local Eastern time)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp (NULL = active)"
+
+      - name: documentactionreason
+        description: |
+          Athena document action reason / routing-rule reference
+          (athenahealth.athenaone.documentactionreason). Defines the resulting
+          NEXTSTATUS / NEXTDOCUMENTCLASS / DEFAULTASSIGNTO for an action.
+        columns:
+          - name: documentactionreasonid
+            description: "Document action reason ID (Primary Key)"
+          - name: nextstatus
+            description: "Document status the action transitions the document to"
+          - name: defaultassignto
+            description: "Default bucket the routing rule assigns to"
+          - name: deleteddatetime
+            description: "Soft delete timestamp (NULL = active)"
+
+      - name: medication
+        description: |
+          Athena medication catalog (athenahealth.athenaone.medication). One row per
+          cataloged medication with FDB / RxNorm / NDC / HIC therapeutic class / generic
+          concept / GCN classification. Joined to patientmedication (via medicationid) and
+          by name-match to recover classification for polypharmacy de-dup and Beers HRM
+          matching in stg_athena__patientmedication.
+        columns:
+          - name: medicationid
+            description: "Athena medication catalog ID (join key to patientmedication)"
+          - name: medicationname
+            description: "Medication display name (name-match join key)"
+          - name: rxnorm
+            description: "RxNorm concept code"
+          - name: ndc
+            description: "National Drug Code"
+          - name: fdbmedid
+            description: "First Databank medication ID"
+          - name: hic3code
+            description: "HIC 3-char therapeutic class code"
+          - name: hic2code
+            description: "HIC 2-char therapeutic class group"
+          - name: hic1code
+            description: "HIC 1-char therapeutic class section"
+          - name: genericmedconceptid
+            description: "FDB generic medical concept ID (de-dup key for distinct-drug counting)"
+          - name: gcnclinicalforumulationid
+            description: "GCN clinical formulation ID"
+
+      - name: patientmedication
+        description: |
+          Athena patient medication records (athenahealth.athenaone.patientmedication).
+          One row per medication on a patient's chart. DEACTIVATIONDATETIME IS NULL =
+          currently active medication. Used for RN inbox per-patient clinical summary.
+        columns:
+          - name: patientid
+            description: "Athena Patient ID"
+          - name: deactivationdatetime
+            description: "When the medication was deactivated (NULL = active)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp (NULL = active)"
+
+      - name: interfacemessage
+        description: "Athena interface message records (Delta Lake replica)"
+        columns:
+          - name: interfacemessageid
+            description: "Interface Message ID (Primary Key)"
+
+      - name: interfacemessageparam
+        description: "Athena interface message parameters (Delta Lake replica)"
+        columns:
+          - name: interfacemessageid
+            description: "Interface Message ID (Foreign Key)"
+          - name: paramname
+            description: "Parameter name"
+
+      - name: interfacemessagedata
+        description:
+          "Athena interface message data payloads (Delta Lake replica).
+          Contains structured HL7/CCDA message content linked to interface
+          messages."
+        columns:
+          - name: interfacemessagedataid
+            description: "Interface Message Data ID (Primary Key)"
+          - name: interfacemessageid
+            description: "Interface Message ID (Foreign Key to interfacemessage)"
+          - name: contextid
+            description: "Context/department ID"
+
+      - name: interfacemessagedataclob
+        description:
+          "Athena interface message CLOB payloads (Delta Lake replica).
+          Contains large-object message content (full CCDA XML, HL7 segments)
+          for interface messages exceeding standard field length."
+        columns:
+          - name: interfacemessagedataid
+            description: "Interface Message Data ID (Foreign Key to interfacemessagedata)"
+          - name: contextid
+            description: "Context/department ID"
+          - name: clobdata
+            description: "Large-object message content (CCDA XML, HL7 segments)"
+
+      - name: patientaudit
+        description:
+          "Patient audit trail - tracks changes to patient records (Delta
+          Lake replica)"
+        columns:
+          - name: sourceid
+            description: "Patient ID that was changed"
+          - name: fieldname
+            description: "Field that was changed"
+          - name: oldvalue
+            description: "Previous value"
+          - name: newvalue
+            description: "New value"
+          - name: eventdatetime
+            description: "When the change occurred"
+
+      - name: insuranceproducttype
+        description: "Insurance product type reference data (Delta Lake replica)"
+        columns:
+          - name: insuranceproducttypeid
+            description: "Insurance Product Type ID (Primary Key)"
+          - name: name
+            description: "Product type name (e.g., Medicare HMO, Medicare PPO)"
+
+      - name: governmentfundedtype
+        description: "Government funded insurance type reference (Delta Lake replica)"
+        columns:
+          - name: governmentfundedtypeid
+            description: "Government Funded Type ID (Primary Key)"
+          - name: name
+            description: "Government funded type name (e.g., Medicare, Medicaid)"
+
+      - name: insurancereportingcategory
+        description: "Insurance reporting category reference (Delta Lake replica)"
+        columns:
+          - name: insurancereportingcategoryid
+            description: "Insurance Reporting Category ID (Primary Key)"
+          - name: name
+            description: "Reporting category name (payor group)"
+
+      - name: userprofile
+        description:
+          "Athena user profile data (Delta Lake replica). Contains user
+          credentials, positions, department assignments. Used for BH provider
+          attribution via care plan enrollment."
+        columns:
+          - name: username
+            description: "Login username (e.g. jsmith)"
+          - name: userposition
+            description: "User's position (e.g. Provider, Staff)"
+          - name: departmentname
+            description: "User's assigned department"
+          - name: firstname
+            description: "User's first name"
+          - name: lastname
+            description: "User's last name"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: chroniccaremanagement
+        description: "Chronic Care Management enrollment records (Delta Lake replica)"
+        columns:
+          - name: chroniccaremanagementid
+            description: "CCM ID (Primary Key)"
+          - name: patientinsuranceid
+            description: "Patient Insurance ID (Foreign Key)"
+          - name: chroniccarestatusid
+            description: "CCM Status ID (Foreign Key)"
+          - name: effectivedatedatetime
+            description: "CCM effective date"
+          - name: expirationdatedatetime
+            description: "CCM expiration date"
+
+      - name: chroniccarestatus
+        description: "Chronic Care Status reference (Delta Lake replica)"
+        columns:
+          - name: chroniccarestatusid
+            description: "CCM Status ID (Primary Key)"
+          - name: name
+            description: "Status name (Enrolled, Unenrolled, etc.)"
+
+      - name: customdemographics
+        description: "Custom demographics/fields for patients (Delta Lake replica)"
+        columns:
+          - name: patientid
+            description: "Athena Patient ID"
+          - name: customfieldname
+            description: "Custom field name (e.g., Patient Tier)"
+          - name: customfieldvalue
+            description: "Custom field value"
+
+      - name: clinicalencounter
+        description: "Clinical encounter records (Delta Lake replica)"
+        columns:
+          - name: clinicalencounterid
+            description: "Clinical Encounter ID (Primary Key)"
+          - name: patientid
+            description: "Patient ID"
+          - name: appointmentid
+            description: "Related appointment ID"
+          - name: clinicalencountertype
+            description: "Type of clinical encounter"
+          - name: encounterstatus
+            description: "Encounter status"
+
+      - name: clinicalencounterdiagnosis
+        description:
+          "Clinical encounter diagnosis records with SNOMED codes (Delta Lake
+          replica)"
+        columns:
+          - name: clinicalencounterid
+            description: "Clinical Encounter ID (Foreign Key)"
+          - name: snomedcode
+            description: "SNOMED code for the diagnosis"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: clinicalencounterdxicd10
+        description: "Clinical encounter ICD-10 diagnosis records (Delta Lake replica)"
+        columns:
+          - name: clinicalencounterdxid
+            description: "Diagnosis record ID"
+          - name: clinicalencounterid
+            description: "Clinical Encounter ID (Foreign Key)"
+          - name: icdcodeid
+            description: "ICD Code ID (Foreign Key)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: icdcodeall
+        description: "ICD code reference data (Delta Lake replica)"
+        columns:
+          - name: icdcodeid
+            description: "ICD Code ID (Primary Key)"
+          - name: diagnosiscode
+            description: "ICD diagnosis code"
+          - name: diagnosiscodeset
+            description: "Code set (ICD9, ICD10)"
+          - name: isdeleted
+            description: "Deleted flag"
+
+      - name: clinicalordertype
+        description: |
+          Reference catalog of clinical order types (athenahealth.athenaone.clinicalordertype).
+          Used to identify orders by `name` (e.g. ZIO%, HOLTER%, cardiac monitoring devices)
+          via document.clinicalordertypeid join. ORDERTYPECLASS distinguishes lab vs imaging
+          vs DME vs procedure.
+        columns:
+          - name: clinicalordertypeid
+            description: "Clinical Order Type ID (Primary Key)"
+          - name: name
+            description: "Order type name (e.g., 'ZIO XT HEART MONITOR PATCH')"
+          - name: ordertypeclass
+            description: "Order class (LAB, IMAGING, DME, PROC, etc.)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: clinicalprovider
+        description:
+          "Clinical provider reference data for external referrals (Delta
+          Lake replica)"
+        columns:
+          - name: clinicalproviderid
+            description: "Clinical Provider ID (Primary Key)"
+          - name: plcname
+            description: "Provider location name"
+          - name: npi
+            description: "National Provider Identifier"
+          - name: city
+            description: "City"
+          - name: state
+            description: "State"
+          - name: address1
+            description: "Address line 1"
+          - name: address2
+            description: "Address line 2"
+          - name: zip
+            description: "ZIP code"
+          - name: fax
+            description: "Fax number"
+          - name: phone
+            description: "Phone number"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: payer
+        description: "Insurance payer/package reference data (Delta Lake replica)"
+        columns:
+          - name: insurancepackageid
+            description: "Insurance Package ID (Primary Key)"
+          - name: insurancepackagename
+            description: "Insurance package display name"
+          - name: insurancereportingcategory
+            description: "Payor reporting category (e.g., PAYOR_A-MN, PAYOR_B)"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: qmresult
+        description:
+          "Quality measure results - HEDIS/MIPS patient outcomes (Delta Lake
+          replica)"
+        columns:
+          - name: patientid
+            description: "Patient ID"
+          - name: p4pmeasure
+            description: "Quality measure name"
+          - name: p4pprogram
+            description: "Quality program (HEDIS, MIPS)"
+          - name: resultstatus
+            description: "Measure result status"
+          - name: satisfieddate
+            description: "Date the measure was satisfied"
+          - name: exclusionreason
+            description: "Reason for measure exclusion"
+          - name: providerid
+            description: "Provider ID"
+          - name: contextid
+            description: "Context ID (Department ID)"
+          - name: lastupdated
+            description: "Last updated timestamp"
+
+      - name: clinicalresult
+        description: "Athena clinical lab/imaging results (Delta Lake replica)"
+
+      - name: clinicalresultobservation
+        description: "Observations within a clinical result (Delta Lake replica)"
+
+      - name: clinicalservice
+        description: "Encounter clinical service header — bridges procedure codes to encounter (Delta Lake replica)"
+
+      - name: clinicalserviceprocedurecode
+        description: "Procedure codes (CPT/HCPCS/CPT-II/III) attached to a clinical service (Delta Lake replica)"
+
+      - name: p4pmeasure
+        description: "P4P quality measure definitions (Delta Lake replica)"
+
+      - name: p4presult
+        description: "P4P quality measure results per patient (Delta Lake replica)"
+
+      - name: p4presultdata
+        description: "P4P result key-value data elements (Delta Lake replica)"
+
+      - name: vitalsign
+        description: "Patient vital sign readings (Delta Lake replica)"
+        columns:
+          - name: clinicalencounterid
+            description: "Clinical Encounter ID (Foreign Key)"
+          - name: key
+            description: "Vital sign key (e.g., VITALS.BLOODPRESSURE.SYSTOLIC)"
+          - name: value
+            description: "Vital sign value"
+          - name: createddatetime
+            description: "When the reading was recorded"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: vitalattributereading
+        description:
+          "Patient vital attribute readings keyed by CHARTID (Delta Lake
+          replica). One row per discrete reading (e.g. a single systolic or
+          diastolic BP value)."
+        columns:
+          - name: chartid
+            description: "Chart ID (resolve to patient_id via int_patient_chart_crosswalk)"
+          - name: vitalattributeid
+            description: "FK to vitalattribute (7 = BP systolic, 8 = BP diastolic)"
+          - name: value
+            description: "Reading value (string; numeric for BP)"
+          - name: readingdatedatetime
+            description: "When the reading was taken"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: vitalattribute
+        description:
+          "Vital attribute reference/definitions (Delta Lake replica). Maps
+          vitalattributeid to clinicalelementid (e.g. VITALS.BLOODPRESSURE.SYSTOLIC)."
+        columns:
+          - name: vitalattributeid
+            description: "Vital Attribute ID (Primary Key)"
+          - name: clinicalelementid
+            description: "Clinical element key (e.g. VITALS.BLOODPRESSURE.SYSTOLIC)"
+          - name: name
+            description: "Human-readable attribute name"
+
+      - name: visit
+        description: "Athena visit records - billing/encounter visits (Delta Lake replica)"
+        columns:
+          - name: visitid
+            description: "Visit ID (Primary Key)"
+          - name: patientid
+            description: "Patient ID"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: visitcharge
+        description: "Visit charge/procedure codes billed (Delta Lake replica)"
+        columns:
+          - name: visitid
+            description: "Visit ID (Foreign Key)"
+          - name: procedurecode
+            description: "CPT/procedure code billed"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: providergroup
+        description: "Provider group reference data (Delta Lake replica)"
+        columns:
+          - name: providergroupid
+            description: "Provider Group ID (Primary Key)"
+          - name: providergroupname
+            description: "Provider group name"
+
+      - name: cmprogrampatientstatevt
+        description:
+          "Care Management program patient state events (Delta Lake replica).
+          Tracks enrollment/status changes in CM programs (e.g. Behavioral
+          Health)."
+        columns:
+          - name: enterpriseid
+            description: "Patient enterprise ID"
+          - name: cmlocalprogramid
+            description: "Care Management local program ID (61 = Behavioral Health)"
+          - name: createdby
+            description: "Username who created the enrollment event"
+          - name: createddatetime
+            description: "When the state event was created"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: cmcareevent
+        description:
+          "Care management events logged against a patient chart (Delta Lake
+          replica). TYPE is Remote, InPerson, or Documentation."
+        columns:
+          - name: cmcareeventid
+            description: "Care event ID (Primary Key)"
+          - name: chartid
+            description: "Patient chart FK (join to chart.CHARTID for ENTERPRISEID)"
+          - name: type
+            description: "Event type: Remote, InPerson, Documentation"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: cmcareplan
+        description:
+          "Care plan records (Delta Lake replica). PLANTYPE='Behavioral'
+          identifies BH care/treatment plans; ARCHIVEDYN='N' = active."
+        columns:
+          - name: cmcareplanid
+            description: "Care plan ID (Primary Key)"
+          - name: chartid
+            description: "Patient chart FK (join to chart.CHARTID for ENTERPRISEID)"
+          - name: plantype
+            description: "Plan type (Behavioral, Longitudinal)"
+          - name: planname
+            description: "Plan name (e.g. 'Treatment Plan created on YYYY-MM-DD')"
+          - name: archivedyn
+            description: "Y/N — archived plans excluded from active panel"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: chartquestionnaire
+        description:
+          "Chart questionnaires (Delta Lake replica). Holds PHQ-2/PHQ-9,
+          PHQ-9, GAD-7, etc. SCORE values used for BH outcome tracking."
+        columns:
+          - name: chartquestionnaireid
+            description: "Questionnaire instance ID (Primary Key)"
+          - name: chartid
+            description: "Patient chart FK (join to chart.CHARTID for ENTERPRISEID)"
+          - name: questionnairetemplatename
+            description: "Template name (e.g. 'PHQ-9', 'GAD-7', 'PHQ-2/PHQ-9')"
+          - name: score
+            description: "Numeric score (stored as STRING — TRY_CAST to INT)"
+          - name: scoreddatetime
+            description: "Timestamp when the questionnaire was scored"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+      - name: chart
+        description:
+          "Patient chart bridge (Delta Lake replica). Links CHARTID to
+          ENTERPRISEID (= patient MRN)."
+        columns:
+          - name: chartid
+            description: "Chart ID (Primary Key)"
+          - name: enterpriseid
+            description: "Patient enterprise ID = MRN"
+          - name: deleteddatetime
+            description: "Soft delete timestamp"
+
+  # ============================================
+  # AthenaHealth Financials Source - Billing/Transaction Data
+  # ============================================
+  - name: athenahealth_financials
+    description:
+      "AthenaHealth financial/billing data - Delta Lake replica synced
+      from Snowflake ATHENA.FINANCIALS"
+    database: athenahealth
+    schema: financials
+    tables:
+      - name: activityfact
+        description: |
+          Athena billing activity/transaction fact table (athenahealth.financials.activityfact).
+          Contains charges, payments, adjustments, and refunds for claims. TYPE column
+          indicates the transaction type (CHARGE, PAYMENT, ADJUSTMENT, TRANSFERIN, etc.).
+          STATUS1 indicates billing status (BILLED, CLOSED, HOLD, etc.). Used for CPT code
+          population on the intake roster via E&M procedure codes (99202-99215).
+        config:
+          loaded_at_field: "CAST(created AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 168, period: hour }
+        columns:
+          - name: id
+            description: "Activity fact record ID (Primary Key)"
+          - name: patientid
+            description: "Athena Patient ID"
+          - name: appointmentid
+            description: "Related appointment ID"
+          - name: procedurecode
+            description: "CPT/procedure code (e.g., 99213, 99214)"
+          - name: type
+            description:
+              "Transaction type: CHARGE, PAYMENT, ADJUSTMENT, TRANSFERIN,
+              TRANSFEROUT, REFUND"
+          - name: status1
+            description: "Billing status: BILLED, CLOSED, HOLD, VOID, DENIED"
+          - name: fromdate
+            description: "Service date (date of service for the charge)"
+          - name: created
+            description: "When the transaction record was created"
+          - name: lastupdated
+            description: "When the transaction was last modified"
+
+  # ============================================
+  # Healthcare Source - Analytics Tables/Views
+  # ============================================
+  - name: healthcare
+    description: "Healthcare analytics schema with patient, appointment, and RAF data"
+    database: databricks_prod
+    schema: healthcare
+    tables:
+      - name: public_reputation_snapshot
+        description: >
+          Daily snapshots of public business-listing aggregates per clinic
+          (databricks_prod.healthcare.public_reputation_snapshot). One row per
+          (source, clinic_name, snapshot_date) with overall_rating and
+          review_count from Google Places and Yelp Fusion. MANAGED Delta table
+          produced outside dbt by the Prefect public-reputation-snapshot flow.
+          Public data only, no PHI; never joined to patient records.
+
+      - name: public_review_raw
+        description: >
+          Recent public review excerpts per clinic
+          (databricks_prod.healthcare.public_review_raw). Upserted by stable
+          review_id (Google up to 5, Yelp up to 3 per pull), bound to
+          review_published_at. MANAGED Delta table produced outside dbt by the
+          Prefect public-reputation-snapshot flow. Public data only, no PHI.
+
+      - name: fact_provider_nps
+        description: >
+          Provider-level NPS survey response aggregates (databricks_prod.healthcare.fact_provider_nps).
+          One row per provider × survey date. Source of nps_score and nps_category used in Provider Bonus.
+
+      - name: ai_outreach_outreach
+        description: >
+          AI_Outreach AI outreach call records (databricks_prod.healthcare.ai_outreach_outreach).
+          MANAGED Delta table produced outside dbt (ML/notebook pipeline). Used by
+          marts_bi_v3.mart_patient_outreach. One row per outreach attempt; carries
+          campaign_name, appt_attribution, athena_patient_id, account_id, sentiment,
+          and call_outcome fields.
+
+      - name: appointments
+        description: >
+          Healthcare-schema appointment fact table (databricks_prod.healthcare.appointments).
+          Curated appointment grain used by membership KPI marts. Source of truth for
+          is_completed, is_membership_visit, is_telehealth, is_behavioral_health flags.
+
+      - name: patient_experience
+        description: >
+          Patient experience / NPS survey responses (databricks_prod.healthcare.patient_experience).
+          One row per survey response with nps_category in (Promoter, Passive, Detractor).
+          Used by membership KPI marts for monthly NPS aggregation.
+
+      - name: mv_attribution_self_service
+        description: >
+          Materialized view of patient-level VBC attribution joined with
+          demographics, primary insurance, assigned provider, and AWV/MDDO case
+          status. One row per active attribution. Refreshed every 10 hours from
+          Salesforce attribution objects and the MDM patient master.
+
+      - name: mv_cbp_selfservice
+        description: >
+          Materialized view powering Controlling Blood Pressure (CBP) quality
+          reporting. One row per attributed hypertensive patient with most
+          recent systolic/diastolic readings, control flag, and clinical
+          exclusion reasons. Sourced from Athena observation + problem-list
+          tables.
+
+      - name: vw_appointmentview_patient_visits
+        description: >
+          Athena appointmentview-derived patient-visit feed (one row per
+          appointment) used by legacy Tableau/Snowflake-era visit reports.
+          Joins patient demographics, provider, department, and Athena
+          appointment status. Source system: Athena One.
+
+      - name: v_cbp_selfservice
+        description: >
+          View wrapper over mv_cbp_selfservice used by Tableau / self-service
+          consumers. One row per attributed hypertensive patient with current
+          BP control status and exclusion flags. Source system: Athena One via
+          MDM dimensions.
+
+      - name: v_scheduling_capacity_selfservice
+        description: >
+          Provider scheduling capacity self-service view — one row per provider
+          × clinic × day with template slots, booked slots, fill rate, and open
+          slot counts. Sourced from Athena appointment + scheduling-template
+          tables; used by capacity-planning dashboards.
+
+      - name: v_tcm_selfservice
+        description: >
+          Transition-of-Care self-service view — one row per hospital discharge
+          (ADT event) with linked Salesforce TCM case, scheduled and completed
+          TOC appointments, and 2-business-day RN-call flag. Source: ADT feed
+          (PointClickCare / PatientPing) joined to Athena and Salesforce.
+
+      - name: bhpatient_appointments
+        description: >
+          DEPRECATED 2026-04-28. Snowflake-derived BH appointment export that
+          stopped refreshing on 2026-01-12 when its upstream materialized view
+          was disabled. Replaced by live queries against athenahealth.athenaone
+          (appointment + chartquestionnaire + cmcareplan + customdemographics)
+          inside v_bhpatientpanel. Retained as a source for historical lineage
+          only — do not use in new models.
+
+      - name: mv_bhpatientpanel
+        description: >
+          DEPRECATED 2026-04-28. Legacy materialized view that no longer exists.
+          Replaced by v_bhpatientpanel dbt view. Retained for lineage only.
+
+      - name: vw_tcm_dashboard
+        description: >
+          TCM dashboard metric view — one row per hospital discharge with TOC
+          completion at 7/14/30 days, RN call within 2 business days, and
+          exclusion reasons. Drives the TCM Tableau dashboard. Source: ADT
+          feed + Salesforce TCM cases + Athena appointments.
+
+      - name: vw_npv_self_service_report
+        description: >
+          New Patient Visit (NPV) self-service report — one row per NPV
+          appointment with scheduling, cancellation, immediate-reschedule, and
+          60-day late-recovery flags. Source: Athena appointment + MDM
+          appointment_type master.
+
+      - name: vw_referral_management
+        description: >
+          Clinical orders and referrals view — one row per Athena clinical
+          order with order type, ordering provider, target specialty, status,
+          and result tracking. Source: Athena One clinical-order tables.
+
+      - name: vw_heartwise_candidates
+        description: >
+          Heartwise cardiac-risk-program candidate identification view — one
+          row per patient meeting cardiac-risk inclusion criteria, with risk
+          flags and existing program-enrollment status. Source: Athena
+          problem-list, lab, and medication tables.
+
+      # ── ML Output Tables (scheduling_pattern_detection.py) ──
+      - name: scheduling_pattern_slots
+        description: >
+          All 151K+ appointment slots scored by Isolation Forest anomaly
+          detection. Each slot has an anomaly_score and is_anomalous flag.
+          Populated by the scheduling_pattern_detection Databricks ML notebook.
+        columns:
+          - name: appointment_id
+            description: "Athena appointment slot ID (Primary Key)"
+            tests:
+              - unique
+              - not_null
+          - name: anomaly_score
+            description: "Isolation Forest anomaly score. More negative = more anomalous."
+          - name: is_anomalous
+            description: "True if the slot was flagged as anomalous by the ML model"
+          - name: slots_same_day_provider
+            description: "Number of slots this provider has on the same day"
+          - name: slot_density_ratio
+            description: "Ratio of this provider's daily slots vs their median"
+
+      - name: scheduling_provider_daily_capacity
+        description: >
+          ML-inferred provider scheduling templates. One row per provider ×
+          clinic × day-of-week with predicted daily slot counts, working hours,
+          and visit type breakdown. Generated by Isolation Forest anomaly
+          removal + K-Means clustering.
+        columns:
+          - name: inferred_daily_slots
+            description: "Predicted total schedulable slots for this provider/day"
+          - name: capacity_confidence
+            description: "Model confidence (0-1). Higher = more consistent historical data."
+          - name: capacity_source
+            description:
+              "How capacity was inferred: template_based, historical_median, or
+              historical_sparse"
+          - name: schedule_consistency
+            description: "Week-to-week consistency of the provider's schedule (0-1)"
+
+      - name: scheduling_drift_detection
+        description:
+          "ML-detected scheduling drift at Organization and Provider levels.
+          Compares recent scheduling patterns against baselines."
+        columns:
+          - name: entity
+            description: "Drift entity type: Organization or Provider"
+            tests:
+              - not_null
+          - name: entity_name
+            description: "Name of the organization or provider"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - entity
+                  - entity_name
+
+      - name: scheduling_overbook_recommendations
+        description:
+          "ML-generated overbooking recommendations per provider, clinic, and
+          appointment date."
+        columns:
+          - name: provider_id
+            description: "Athena provider ID"
+            tests:
+              - not_null
+          - name: clinic_name
+            description: "Clinic name"
+            tests:
+              - not_null
+          - name: appointment_date
+            description: "Appointment date"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - provider_id
+                  - clinic_name
+                  - appointment_date
+
+      - name: scheduling_heatmap_data
+        description: >
+          Hourly scheduling density aggregated at Organization, Clinic, and
+          Provider levels. Generated by the ML scheduling pipeline for heat map
+          visualization.
+        columns:
+          - name: heatmap_level
+            description: "Aggregation level: Organization, Clinic, or Provider"
+            tests:
+              - not_null
+          - name: entity_name
+            description: "Name of the entity at the given heatmap level"
+            tests:
+              - not_null
+          - name: day_of_week
+            description: "Day of week (0=Monday)"
+            tests:
+              - not_null
+          - name: start_hour
+            description: "Hour of day (0-23)"
+            tests:
+              - not_null
+          - name: avg_slots_per_day
+            description: "Average slots per calendar day in this hour window"
+          - name: utilization_rate
+            description: "Ratio of completed slots to total slots"
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - heatmap_level
+                  - entity_name
+                  - day_of_week
+                  - start_hour
+
+      # ── ML Output Tables (scheduling_ml_v2 pipeline) ──
+      - name: scheduling_noshow_predictions
+        description: "Per-slot no-show probability from LightGBM model"
+        columns:
+          - name: appointment_id
+            description: "Athena appointment slot ID (Primary Key)"
+            tests:
+              - unique
+              - not_null
+
+      - name: scheduling_cancel_predictions
+        description: "Per-slot cancellation probability from LightGBM model"
+        columns:
+          - name: appointment_id
+            description: "Athena appointment slot ID (Primary Key)"
+            tests:
+              - unique
+              - not_null
+
+      - name: scheduling_demand_forecast
+        description:
+          "12-week demand forecast per clinic from Prophet model with flu
+          season and AEP regressors"
+        columns:
+          - name: clinic_name
+            description: "Clinic name"
+            tests:
+              - not_null
+          - name: forecast_date
+            description: "Forecast target date"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - clinic_name
+                  - forecast_date
+
+      - name: scheduling_burnout_risk
+        description: "Composite burnout risk score per provider-clinic"
+        columns:
+          - name: provider_id
+            description: "Athena Provider ID"
+            tests:
+              - not_null
+          - name: clinic_name
+            description: "Clinic name"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - provider_id
+                  - clinic_name
+
+      - name: scheduling_utilization_alerts
+        description:
+          "Capacity utilization alerts: NEAR_CAPACITY, APPROACHING_CAPACITY,
+          UNDERUTILIZED, PROVIDER_OVERLOADED"
+        columns:
+          - name: alert_entity
+            description: "Entity type generating the alert"
+            tests:
+              - not_null
+          - name: entity_name
+            description: "Name of the alerting entity"
+            tests:
+              - not_null
+          - name: alert_type
+            description: "Alert category"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - alert_entity
+                  - entity_name
+                  - alert_type
+
+      - name: scheduling_load_balance
+        description:
+          "Cross-clinic load balancing opportunities identifying overloaded
+          windows"
+        columns:
+          - name: overloaded_clinic
+            description: "Clinic that is overloaded"
+            tests:
+              - not_null
+          - name: receiving_clinic
+            description: "Clinic with available capacity"
+            tests:
+              - not_null
+          - name: hour
+            description: "Hour of day"
+            tests:
+              - not_null
+          - name: day_name
+            description: "Day of week name"
+            tests:
+              - not_null
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - overloaded_clinic
+                  - receiving_clinic
+                  - hour
+                  - day_name
+
+      - name: scheduling_ma_staffing
+        description:
+          "Per provider-day concurrent appointment overlap analysis for MA
+          staffing"
+
+      - name: scheduling_provider_archetypes
+        description:
+          "GMM-derived provider scheduling archetypes with soft cluster
+          assignments"
+
+      - name: empi_golden_records_raw
+        description:
+          "Raw EMPI Golden Record identity clusters landed by the Splink
+          probabilistic-matching notebook (empi_splink_matching_v2). Links
+          ATHENA, SALESFORCE, MEMBERSHIP_PLATFORM, AHA, MEDICARE, etc. via golden_id. Natural
+          key is (source_system, source_id) — the same source_id can recur
+          across systems. The deduped ServingDB-synced surface is
+          int_empi_golden_records_clean (healthcare.empi_golden_records)."
+        config:
+          loaded_at_field: updated_at
+          # Evidence (DEV-4549): median updated_at batch gap ~48h, p95 ~149h.
+          freshness:
+            warn_after: { count: 96, period: hour }
+            error_after: { count: 336, period: hour }  # ~14d
+        # Soft warn on raw grain: Splink may emit within-system dups that the
+        # clean model collapses. Never declare single-column unique on source_id.
+        columns:
+          - name: golden_id
+            description: "Golden Record ID — unique identity cluster identifier"
+          - name: source_system
+            description: "Source system (ATHENA, SALESFORCE, AHA, MEDICARE, …)"
+            tests:
+              - not_null:
+                  config:
+                    severity: warn
+          - name: source_id
+            description: "Patient ID from the source system"
+            tests:
+              - not_null:
+                  config:
+                    severity: warn
+          - name: mbi
+            description: "Medicare Beneficiary Identifier"
+          - name: cluster_size
+            description: "Number of source records in this identity cluster"
+          - name: is_test_patient
+            description: "Flag indicating test patient"
+          - name: is_primary
+            description: "Flag indicating primary record in cluster"
+
+      - name: empi_identity_profile
+        description: "EMPI identity-level profile attributes keyed by golden_id,
+          including immutable identity_id and deterministic matching flags."
+        config:
+          # Evidence (DEV-4549): row updated_at shows a single batch — column-based
+          # freshness cannot measure write cadence. Use Delta commit history instead.
+          loaded_at_query: "{{ delta_history_freshness('databricks_prod', 'healthcare', 'empi_identity_profile') }}"
+          freshness:
+            warn_after: { count: 96, period: hour }
+            error_after: { count: 336, period: hour }
+        columns:
+          - name: golden_id
+            description: "EMPI Golden Record ID"
+          - name: identity_id
+            description:
+              "Immutable business identity ID in H#### format (stable across
+              golden_id churn)"
+          - name: updated_at
+            description: "Last profile refresh timestamp from EMPI pipeline"
+
+      - name: empi_identity_xref
+        description:
+          "EMPI source-to-golden cross-reference. One row per
+          (source_system, source_id) mapping every external identity
+          (ATHENA, SALESFORCE, MEMBERSHIP_PLATFORM, PAYOR_B, PAYOR_A, PAYOR_ALPHA_MMR, PAYOR_C,
+          PAYOR_DELTA, AHA, MSSP) to its golden_id and immutable
+          identity_id. PAYOR_ALPHA_MMR keys on the CMS payor_alphamn_pers_id person id
+          (distinct from PAYOR_A member_subscriber_id) so CMS-paid persons earn
+          an immutable H and resolve person_id -> identity inside EMPI."
+        config:
+          loaded_at_field: updated_at
+          # Evidence (DEV-4549): median gap ~48h, p95 ~68h.
+          freshness:
+            warn_after: { count: 96, period: hour }
+            error_after: { count: 336, period: hour }
+        # (source_system, source_id) is the documented grain and the basis for
+        # mart_empi_identity_map's surrogate PK; uniqueness here is what makes
+        # that PK trustworthy. golden_id is the EMPI hinge every downstream join
+        # relies on, so it must never be null.
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - source_system
+                  - source_id
+        columns:
+          - name: source_system
+            description: "Originating system / payor for the source_id"
+          - name: source_id
+            description: "Identifier as used in the source system"
+          - name: identity_id
+            description: "Immutable EMPI business identity ID"
+          - name: golden_id
+            description: "EMPI Golden Record ID"
+            tests:
+              - not_null
+
+      - name: empi_identity_registry
+        description:
+          "EMPI identity lifecycle registry — source of truth for the permanent
+          identity_id (H-#) assigned by the Databricks empi_splink_matching_v2
+          notebook. One row per identity_id with its current_golden_id, status
+          (ACTIVE / MERGED), lifecycle timestamps and the merged_into_identity_id
+          pointer used to detect pending/resolved merges. The H-# golden index is
+          protected by a dedicated guard-test set (PK integrity, ACTIVE->golden /
+          MERGED->target invariants, dangling-golden relationship, and a snapshot
+          immutability ledger for created_at + no-vanish)."
+        config:
+          loaded_at_field: updated_at
+          # Evidence (DEV-4549): median gap ~72h, p95 ~298h.
+          freshness:
+            warn_after: { count: 168, period: hour }
+            error_after: { count: 504, period: hour }  # ~21d
+        columns:
+          - name: identity_id
+            description: "Immutable EMPI business identity ID (H-#) — primary key"
+            # PK integrity for the H-# ledger: a duplicate or null H-# corrupts
+            # the permanent identity index, so both are hard failures (error).
+            tests:
+              - unique:
+                  config:
+                    severity: error
+              - not_null:
+                  config:
+                    severity: error
+          - name: current_golden_id
+            description: "Current golden_id this identity resolves to"
+            # No dangling golden pointer. Set to warn (not error): at the
+            # 2026-06-18 baseline 2,805 rows (2,761 MERGED + 44 ACTIVE) point at a
+            # golden_id that no longer exists in empi_golden_records_raw — expected
+            # drift as EMPI re-clusters/collapses goldens faster than the registry
+            # re-points. Warn surfaces growth without redding the build; promote to
+            # error once the ACTIVE backlog is driven to 0.
+            tests:
+              - relationships:
+                  arguments:
+                    to: source('healthcare', 'empi_golden_records_raw')
+                    field: golden_id
+                  config:
+                    severity: warn
+                    where: "current_golden_id is not null"
+                    tags: ["referential_integrity", "empi", "identity"]
+          - name: status
+            description: "Identity status: ACTIVE or MERGED"
+          - name: created_at
+            description: "Immutable creation timestamp of the H-# (never changes)"
+          - name: updated_at
+            description: "Last lifecycle update timestamp (status / golden re-point)"
+          - name: merged_into_identity_id
+            description: "Target identity_id when this identity was merged"
+
+      - name: empi_identity_merge_events
+        description:
+          "Append-only ledger of identity merge events (absorbed H-# into
+          survivor H-#) written by empi_splink_matching_v2 before xref rewrite."
+
+      - name: empi_identity_merge_xref_before
+        description:
+          "Append-only before-images of xref rows for absorbed identities
+          captured at merge (and unmerge) time for audit / governed rollback."
+
+      - name: empi_identity_must_not_link
+        description:
+          "Pairwise constraint preventing auto-merge of two identity_ids
+          (canonical identity_id_a < identity_id_b). Written by governed unmerge."
+
+      - name: empi_unmerge_requests
+        description:
+          "Governed unmerge request queue (PENDING/APPROVED/APPLIED/FAILED)
+          with dry_run support; applied by empi_identity_unmerge notebook."
+
+      - name: empi_unmerge_request_xrefs
+        description:
+          "Explicit (source_system, source_id) mappings to reassign for an
+          approved unmerge request — only listed xrefs move back to absorbed."
+
+      - name: empi_medicare_matches
+        description:
+          "Medicare Attribution matches linking MBIs to Athena patient IDs.
+          Partitioned by attr_report_period. Used to identify MSSP-attributed
+          patients who should NOT receive the MA coding intensity adjustment."
+        # Drives the MEDICARE leg of patients.is_attributed. A stalled medicare
+        # matcher silently freezes Medicare attribution, so keep freshness
+        # visibility — but CMS-monthly cadence means a 96h hard error permanently
+        # reds CD between matcher runs. Code deploys must not gate on that cadence.
+        config:
+          loaded_at_field: updated_at
+          # Evidence (DEV-4549): CMS-monthly matcher; last batch was ~26d old at audit.
+          # Prior 7d/30d still reds between monthly CMS files.
+          freshness:
+            warn_after: { count: 1080, period: hour }   # ~45d
+            error_after: { count: 2160, period: hour }  # ~90d
+        columns:
+          - name: match_id
+            description: "Unique match record identifier"
+          - name: mbi
+            description: "Medicare Beneficiary Identifier"
+          - name: athena_patient_id
+            description: "Matched Athena Patient ID"
+          - name: golden_id
+            description: "EMPI Golden Record ID"
+          - name: attr_assignment_type
+            description:
+              "Medicare attribution type: CLAIMS_STEP_1, CLAIMS_STEP_3, or
+              VOLUNTARY_ALIGNED_ONLY"
+          - name: attr_report_period
+            description: "Attribution report period (e.g., 2025-12)"
+          - name: match_type
+            description: "Match methodology (e.g., MBI_DETERMINISTIC)"
+          - name: match_confidence
+            description: "Match confidence score"
+          - name: approval_status
+            description: "Approval status: auto_approved, manually_approved, pending"
+
+      - name: patient_identity
+        description:
+          "Patient identity dimension — cross-system identity bridge from
+          EMPI golden records. Links Athena, Salesforce, and enterprise IDs."
+        columns:
+          - name: athena_id
+            description: "Athena patient ID"
+          - name: salesforce_id
+            description: "Salesforce Account ID"
+          - name: golden_id
+            description: "EMPI Golden Record ID"
+          - name: enterprise_id
+            description: "Athena Enterprise ID"
+          - name: provider_group_id
+            description: "Athena Provider Group context ID"
+          - name: chart_group_name
+            description: "Athena chart group name"
+          - name: medicare_beneficiary_id
+            description: "Medicare Beneficiary Identifier (MBI)"
+            config:
+              meta:
+                pii: true
+
+      - name: empi_payor_matches
+        description:
+          "Payor attribution matches linking commercial payor member IDs to
+          EMPI golden records. MBI deterministic for PAYOR_B/MSSP, probabilistic
+          Splink for PAYOR_A/PAYOR_C/Payor Delta."
+        # THE commercial attribution key feeding patients.is_attributed. A
+        # stalled match pipeline silently freezes attribution, so add freshness
+        # (this table is a daily pipeline and was fresh — ~3h — at audit time).
+        config:
+          loaded_at_field: updated_at
+          # Evidence (DEV-4549): median gap ~35h, p95 ~176h.
+          freshness:
+            warn_after: { count: 72, period: hour }
+            error_after: { count: 336, period: hour }
+        tests:
+          # Catch a sudden collapse/spike in match volume (pipeline regression).
+          - elementary.volume_anomalies:
+              arguments:
+                timestamp_column: updated_at
+                time_bucket:
+                  period: day
+                  count: 1
+                sensitivity: 3
+              config:
+                severity: warn
+                tags: ["elementary", "shift_guard"]
+          # Catch an approval-mix shift (e.g. a surge in pending /
+          # data_quality_issue, or a status-vocabulary change) that would
+          # silently drop members from the approved-only crosswalks.
+          - elementary.dimension_anomalies:
+              arguments:
+                dimensions: ["approval_status"]
+                timestamp_column: updated_at
+                time_bucket:
+                  period: day
+                  count: 1
+              config:
+                severity: warn
+                tags: ["elementary", "dimension", "attribution"]
+        columns:
+          - name: match_id
+            description: "Unique match record identifier"
+          - name: golden_id
+            description: "EMPI Golden Record ID from empi_golden_records"
+          - name: payor
+            description: "Payor name: PAYOR_B, MSSP, PAYOR_A, PAYOR_C, PAYOR_DELTA"
+          - name: payor_source_table
+            description: "Source raw table name (e.g., raw_uhc_members)"
+          - name: payor_member_id
+            description: "Member ID from the payor system"
+          - name: athena_patient_id
+            description: "Matched Athena Patient ID"
+            # Approved matches should resolve to a real (non-test, non-deleted)
+            # row in the patients dimension. Warn-only: many matches legitimately
+            # point at inactive patients that the dimension still carries, and at
+            # patients filtered out upstream — a spike in orphans signals a key
+            # drift, not a hard contract.
+            tests:
+              - relationships:
+                  arguments:
+                    to: ref('patients')
+                    field: patient_id
+                  config:
+                    severity: warn
+                    where: "approval_status in ('auto_approved', 'manually_approved')"
+                    tags: ["referential_integrity", "attribution"]
+          - name: match_type
+            description: "Match methodology: MBI_DETERMINISTIC or PROBABILISTIC"
+          - name: match_confidence
+            description:
+              "Match confidence: 1.0 for MBI deterministic, 0.70-1.0 for
+              probabilistic"
+          - name: approval_status
+            description: "Approval status: auto_approved, pending, data_quality_issue"
+
+      - name: membership_members
+        description: "Membership Platform member records synced by Prefect
+          membership_member_activity_sync. One row per Membership patient with plan,
+          billing, and status data."
+        columns:
+          - name: membership_patient_id
+            description: "Membership patient UUID — joins to Salesforce
+              Account.Membership_Patient_Id__c"
+            tests:
+              - unique
+              - not_null
+          - name: plan_name
+            description:
+              "Plan display name (always 'Her Membership' — not useful for plan
+              differentiation)"
+          - name: plan_rate_cents
+            description:
+              "Monthly plan rate in cents. 8333 = annual ($999.96/yr), 9999 =
+              standard monthly ($99.99/mo)"
+          - name: signup_page_slug
+            description:
+              "Membership signup page slug. 'Healthcare-legacy-member' for legacy,
+              'her-membership' for standard"
+          - name: total_invoiced_cents
+            description:
+              "Cumulative amount invoiced in cents. 0 = legacy free year (no
+              billing yet)"
+          - name: total_paid_cents
+            description: "Cumulative amount paid in cents"
+          - name: membership_status
+            description: "Membership membership status: active, inactive, cancelled, etc."
+          - name: member_since
+            description: "Membership start date"
+
+  # ============================================
+  # BackendBaaS BIPlatform Source - AI_Outreach Outreach
+  # ============================================
+
+  - name: backendbaas_bi
+    description: "BackendBaaS BIPlatform application database — operational application
+      data federated into Databricks, including outreach and legacy membership"
+    database: backendbaas_bi
+    schema: public
+    tables:
+      - name: legacy_members
+        description: >
+          Canonical current-state store for legacy memberships. Salesforce
+          controls routing through Account.Legacy_Member__c; this table is
+          authoritative for whether a routed legacy membership is active.
+        config:
+          # DEV-4549 follow-up: legacy_members is a FOREIGN postgresql table (not
+          # Delta), so delta_history_freshness (DESCRIBE HISTORY) raises
+          # DELTA_ONLY_OPERATION. Use last_synced_at (Salesforce-to-BackendBaaS
+          # projection time) as the freshness column instead.
+          loaded_at_field: last_synced_at
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 96, period: hour }
+        columns:
+          - name: salesforce_account_id
+            description: "Salesforce Account ID; canonical cross-system identity."
+            tests:
+              - unique
+              - not_null
+          - name: is_active
+            description: "Whether the legacy membership is currently active."
+            tests:
+              - not_null
+          - name: legacy_effective_at
+            description: "Timestamp when BackendBaaS became authoritative for this membership."
+          - name: last_synced_at
+            description: "Most recent successful Salesforce-to-BackendBaaS projection."
+            tests:
+              - not_null
+      - name: legacy_membership_events
+        description: >
+          Append-only audit events for legacy membership sync and Membership offload.
+          This is not a complete point-in-time lifecycle ledger and is not used
+          to reconstruct historical active state.
+        columns:
+          - name: id
+            tests:
+              - unique
+              - not_null
+          - name: salesforce_account_id
+            tests:
+              - not_null
+          - name: event_type
+            tests:
+              - not_null
+      - name: ai_outreach_outreach_log
+        description: "Real-time event log for AI_Outreach AWV scheduling outreach campaigns"
+        config:
+          loaded_at_field: "created_at"
+          # Evidence (DEV-4549): median created_at batch gap ~24h, p95 ~120h.
+          freshness:
+            warn_after: { count: 144, period: hour }
+            # fusion ignores error_after: null when parent would inherit; warn-only
+            error_after: { count: 720, period: hour }
+      - name: ai_outreach_webhooks
+        description:
+          "Raw AI_Outreach End of Sequence Report webhook payloads with per-call
+          outreach array in raw_payload JSONB"
+        config:
+          loaded_at_field: "received_at"
+          freshness:
+            warn_after: { count: 72, period: hour }
+            error_after: null
+
+
+  - name: backendbaas_bi_midi
+    description: >
+      BackendBaaS BIPlatform `BIPlatform` schema — MIDI intake roster and document pipeline.
+      Federated into Databricks as backendbaas_bi.BIPlatform.*. Authoritative write path
+      is BackendBaaS (intake_roster_sheets_sync); dbt model intake_roster projects
+      into healthcare for analytics joins.
+    database: backendbaas_bi
+    schema: BIPlatform
+    tables:
+      - name: intake_roster
+        description: "MIDI intake roster visit grain — intake_status, consent, CPT"
+        config:
+          # Evidence (DEV-4549): row updated_at is a single full-refresh batch;
+          # use Delta commit history. Keep bursty-source error pad at 7d.
+          loaded_at_query: "{{ delta_history_freshness('backendbaas_bi', 'BIPlatform', 'intake_roster') }}"
+          freshness:
+            warn_after: { count: 48, period: hour }
+            error_after: { count: 168, period: hour }
+      - name: attribution_decisions
+        description: >
+          Human-reviewed (and EligibilityAPI-eligibility-seeded) dual-attribution
+          decisions: which attributed payor is primary vs secondary for an
+          identity. Keyed on identity_id (H-number) with athena_patient_id for
+          census joins. snapshot_hash captures the attributed-payor set at
+          decision time so patient_census can fall back to the roster default
+          when a later payor file changes the attributed set.
+        config:
+          loaded_at_field: updated_at
+          freshness:
+            warn_after: { count: 168, period: hour }
+            error_after: null
+      - name: mdm_staff
+        description: >
+          MDM staff master (Entra + TriNet + Salesforce + Athena identity
+          crosswalk). One row per employee with role, job_title, manager,
+          team, and external IDs (salesforce_id, athena_user_id). Used to
+          resolve "Laura's nurse team" for ADT validity gating in TCM /
+          re-tiering. Federated into Databricks as backendbaas_bi.BIPlatform.mdm_staff.
+        config:
+          # Evidence (DEV-4549): row updated_at is a single batch — use Delta history.
+          loaded_at_query: "{{ delta_history_freshness('backendbaas_bi', 'BIPlatform', 'mdm_staff') }}"
+          freshness:
+            warn_after: { count: 72, period: hour }
+            error_after: null
+        columns:
+          - name: salesforce_id
+            description: "Salesforce User Id — joins to Case.OwnerId for ADT ownership."
+          - name: athena_user_id
+            description: "Athena user id for the staff member (nullable)."
+          - name: role
+            description: "Functional role (e.g. Nurse, Operations, Engineering)."
+          - name: manager
+            description: "Direct manager display name (e.g. Laura Kahlbaugh)."
+          - name: active
+            description: "Whether the staff member is currently active."
+
+  # ============================================
+  # MDM Source - Master Data Management
+  # ============================================
+
+  - name: mdm
+    description: "Master Data Management reference tables"
+    # These tables are dbt-built and deep-cloned into the dev catalog, so reads
+    # follow the target: `mdm` for prod, `databricks_dev` for dev. (Sources do
+    # not run through generate_database_name, hence the inline target check.)
+    database: "{{ 'databricks_dev' if target.name in ['dev', 'devcg'] else 'mdm' }}"
+    schema: reference_data
+    config:
+      loaded_at_field: last_updated_at
+      # Evidence (DEV-4549): mdm.patient median gap ~24h, p95 ~144h — 36h warn flaps.
+      freshness:
+        warn_after: { count: 72, period: hour }
+        error_after: { count: 240, period: hour }
+    tables:
+      - name: provider
+        description: "Master provider reference data"
+        config:
+          freshness: null
+        columns:
+          - name: provider_id
+            description: "Athena Provider ID (Primary Key)"
+            tests:
+              - unique
+              - not_null
+
+      - name: patient
+        description:
+          "Master patient reference data with Salesforce appointment counts
+          and EMPI golden IDs. Refreshed daily via MDM Patient job."
+        columns:
+          - name: patient_id
+            description: "Athena Patient ID (Primary Key)"
+            tests:
+              - unique:
+                  config:
+                    severity: warn
+                    warn_if: ">10"
+              - not_null
+          - name: golden_id
+            description: "EMPI Golden Record ID for identity resolution across systems"
+          - name: salesforce_account_id
+            description: "Linked Salesforce Account ID"
+          - name: in_salesforce
+            description: "Flag indicating patient exists in Salesforce"
+          - name: completed_number
+            description: "Number of completed appointments (from Salesforce rollup)"
+          - name: future_number
+            description: "Number of future appointments (from Salesforce rollup)"
+          - name: cancelled_number
+            description: "Number of cancelled appointments (from Salesforce rollup)"
+          - name: total_number
+            description: "Total number of appointments (from Salesforce rollup)"
+          - name: athena_enterprise_id
+            description: "Athena Enterprise ID for multi-practice identification"
+
+      - name: appointment_type
+        description: "Appointment type reference with classification flags"
+        config:
+          freshness: null
+        columns:
+          - name: appointment_type_id
+            description: "Athena Appointment Type ID"
+            tests:
+              - unique
+              - not_null
+
+      - name: insurance
+        description: "Insurance package reference data"
+
+      - name: location
+        description: "Location/clinic reference data"
+        config:
+          freshness: null
+
+      - name: department
+        description: "Department/clinic mapping reference data"
+        config:
+          freshness: null
+
+      - name: v_insurance_sync
+        description:
+          "Insurance sync view — joins Athena insurance packages with MDM
+          classification. Source for sync_mdm_insurance incremental merge."
+
+      - name: v_provider_sync
+        description:
+          "Provider sync view — assigns clinic by plurality of future slots.
+          Source for sync_mdm_provider incremental merge. NOTE: dbt model
+          v_provider_sync in sources/mdm/ replicates this logic."
+
+  # ============================================
+  # TriNet HRIS Source — Prefect daily sync → Databricks
+  # ============================================
+
+  - name: hr_trinet
+    description:
+      "TriNet HRIS data synced daily by Prefect (trinet_employee_sync).
+      Companies 213A + 213B."
+    database: databricks_prod
+    schema: hr
+    config:
+      freshness: null
+    tables:
+      - name: trinet_employees
+        description: "MDM employee master from TriNet HRIS. Merged daily on
+          trinet_employee_id. Companies 213A (corporate) and 213B (clinical)."
+        columns:
+          - name: trinet_employee_id
+            description: "Prefixed TriNet employee ID (A-xxx for 213A, B-xxx for 213B)"
+            tests:
+              - unique:
+                  config:
+                    warn_if: ">5"
+                    error_if: ">10"
+              - not_null
+          - name: company_id
+            description: "TriNet company: 213A (corporate), 213B (clinical/providers)"
+          - name: first_name
+            description: "Employee first name"
+          - name: last_name
+            description: "Employee last name"
+          - name: employee_status
+            description: "A=Active, T=Terminated, L=Leave, P=Pending"
+          - name: job_title
+            description: "HR business title"
+          - name: hire_date
+            description: "Service/hire date"
+          - name: original_hire_date
+            description: "Original hire date (for rehires)"
+          - name: termination_date
+            description: "Termination date (null if active)"
+          - name: employment_type
+            description: "Employment type classification"
+
+  # ============================================
+  # Payor Source - PAYOR_A & PAYOR_B Data (SharePoint → Prefect → Databricks)
+  # ============================================
+
+  - name: payor
+    description:
+      "Raw payor files (PAYOR_A, PAYOR_B) loaded from SharePoint via Prefect.
+      Schema auto-evolves."
+    database: databricks_prod
+    schema: payor
+    config:
+      freshness: null
+    tables:
+      - name: raw_payor_alpha_members
+        description:
+          "PAYOR_A member roster and cost data. 105 Excel columns + metadata.
+          Contains EMPI demographics."
+        # Roster feeds patients.is_attributed via empi_payor_matches. A stale
+        # file silently freezes PAYOR_A attribution. Rosters are delivered on an
+        # irregular monthly/quarterly cadence from SharePoint via Prefect, so a
+        # hard error_after permanently reds `dbt source freshness` (and thus the
+        # code deploy) between deliveries. Code deploys must NOT gate on payor
+        # DATA cadence — data refresh is Prefect/ADF's job — so this is warn-only
+        # (error_after: null). Staleness still surfaces as a warning here and in
+        # elementary for monitoring. warn_after widened to ~monthly cadence so the
+        # warning means "genuinely overdue", not "normal between deliveries".
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 1080, period: hour }  # ~45d (monthly cadence + slack)
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: patient_last_name
+            description: "EMPI: Patient last name"
+          - name: patient_first_name
+            description: "EMPI: Patient first name"
+          - name: patient_date_of_birth
+            description: "EMPI: Date of birth"
+          - name: patient_id
+            description: "PAYOR_A-assigned patient identifier"
+          - name: patient_gender
+            description: "EMPI: Patient gender"
+          - name: member_subscriber_id
+            description: "PAYOR_A subscriber ID"
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_claims
+        description:
+          "PAYOR_A claims data with diagnosis/procedure codes. 137 Excel columns
+          + metadata."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: person_id
+            description: "PAYOR_A person identifier (links to member)"
+          - name: claim_nbr
+            description: "Claim number"
+          - name: svc_dt_fst
+            description: "First service date"
+          - name: diag_code1
+            description: "Primary ICD diagnosis code"
+          - name: proc_code
+            description: "CPT procedure code"
+          - name: release_date
+            description: "Reporting period extracted from filename"
+
+      - name: raw_uhc_members
+        description:
+          "PAYOR_B member roster data. Schema auto-evolves from Excel headers on
+          first load."
+        # Feeds patients.is_attributed (PAYOR_B leg) via empi_payor_matches.
+        # Monthly cadence — warn-only (error_after: null) so the code deploy is
+        # not blocked between deliveries. See raw_payor_alpha_members note for rationale.
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 1080, period: hour }  # ~45d (monthly cadence + slack)
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_revenue
+        description: >
+          PAYOR_B member-level revenue file — the PAYOR_B MMR-equivalent (not MOR).
+          Carries per-member CMS gross revenue (operational Total MA Payment
+          analogue), paid RAF A, optional Part A/B splits and RAF B on ECG
+          pipe vintages (May 2026+), county/SCC, contract/PBP/segment, and CMS
+          payment flags. Prefect UHC_REVENUE_COLUMN_MAP aligns Layout 6-1-like
+          headers to PAYOR_A MMR names (parta_pmt/partb_pmt/risk_adjuster_factor_b);
+          vendor TOTAL_MA_AMT is remapped to uhc_unvalidated_total_ma_amt because
+          it does NOT equal CMS Total MA Payment (#65). All columns land as
+          strings (raw passthrough).
+        config:
+          loaded_at_field: "CAST(release_date AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 45, period: day }
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: contract_nbr
+            description: "PAYOR_B MA contract number (H-number) the member is enrolled under."
+          - name: pbp
+            description: "Plan Benefit Package id."
+          - name: gross_revenue
+            description: >
+              Operational CMS Total MA Payment analogue (use as tot_ma_pmt).
+              Correlates with Part A+B when those columns are present; do not
+              confuse with uhc_unvalidated_total_ma_amt / legacy total_ma_amt.
+          - name: risk_adjuster_factor_a
+            description: "CMS-paid Part A/B risk score for the member."
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_claims
+        description: >
+          PAYOR_B member-level medical claim lines (the PAYOR_B cost feed; PAYOR_B analogue
+          of raw_payor_alpha_claims). All columns land as strings. Files are CUMULATIVE
+          rolling snapshots keyed by release_date: each monthly release restates
+          prior service months as claims mature, so the latest release_date is
+          the authoritative current view (mirrors PAYOR_A is_latest_release). DOS
+          columns arrive as 'ddMMMyyyy' (e.g. 10FEB2026) on most vintages and
+          'yyyy-MM-dd' on others. paid_amount is line-level and includes
+          reversals/adjustments, so a straight SUM nets correctly (do NOT dedupe
+          to a natural key — the offsetting reversal rows must be retained).
+        config:
+          loaded_at_field: "CAST(release_date AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 45, period: day }
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: error
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: member_alt_id
+            description: "PAYOR_B member id (joins int_payor__uhc_id_crosswalk.uhc_indv_id)."
+          - name: mbi
+            description: "Medicare Beneficiary Identifier for the member."
+          - name: audit_no
+            description: "PAYOR_B claim audit number (claim-ish identifier; not line-unique)."
+          - name: detail_line_no
+            description: "Claim detail line number."
+          - name: begin_dos
+            description: "Service start date ('ddMMMyyyy' or 'yyyy-MM-dd'; parse tolerantly)."
+          - name: end_dos
+            description: "Service end date."
+          - name: paid_amount
+            description: "Plan paid amount for the line (string; clean before use; includes reversals)."
+          - name: claimed_amount
+            description: "Billed/charged amount for the line (string)."
+          - name: cpt_revenue_code
+            description: "CPT/HCPCS or NUBC revenue code for the line."
+          - name: pos_desc
+            description: "Place-of-service description (e.g. OFFICE/CLINIC, ACUTE-CARE INPATIENT FACILITY)."
+          - name: bill_type_code
+            description: "NUBC type-of-bill code (may carry a trailing '.0' artifact)."
+          - name: srvc_prov_desc
+            description: "Servicing provider specialty description (e.g. FAMILY PRACTICE/GENERAL PRACTICE)."
+          - name: srvc_provider_npi_number
+            description: "Servicing provider NPI."
+          - name: provider_name
+            description: "Servicing provider name."
+          - name: primary_diagnosis_code
+            description: "Primary ICD diagnosis code for the line."
+          - name: release_date
+            description: "Reporting period extracted from filename (cumulative snapshot key)."
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_control_totals
+        description: >
+          PAYOR_B delivery control totals from HERSELF_COUNTS_* files. Each row
+          identifies a report in the monthly ECG bundle and the record count
+          PAYOR_B expected for that report. Loaded by Prefect as raw strings and
+          retained by source/release for ingestion reconciliation.
+        config:
+          loaded_at_field: "cast(loaded_at as timestamp)"
+          freshness:
+            warn_after: {count: 45, period: day}
+            error_after: {count: 75, period: day}
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: error
+                tags: ["payor", "PAYOR_B", "reconciliation", "loader_grain"]
+        columns:
+          - name: report_name
+            description: "PAYOR_B report or extract name represented by the control row."
+          - name: record_count
+            description: "Expected source record count supplied by PAYOR_B."
+          - name: total_amount
+            description: "Expected total amount supplied by PAYOR_B when applicable (NA for non-dollar feeds)."
+          - name: release_date
+            description: "Reporting period extracted from the control filename."
+          - name: source
+            description: "HERSELF_COUNTS_* source filename."
+          - name: loaded_at
+            description: "UTC timestamp when Prefect loaded the control row."
+
+      - name: raw_uhc_financial_statement
+        description: >
+          PAYOR_B Financial Summary (FS / PMPM long-form). Unpivoted statement metrics
+          by period_month from the uhc_financial_statement workbook. Authoritative
+          summary surface for Tier-2 detail-vs-statement reconciliation.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "PAYOR_B", "reconciliation", "loader_grain"]
+        columns:
+          - name: metric
+            description: "Statement line name (e.g. Inpatient Claims, Total Medical Costs)."
+          - name: statement_type
+            description: "FS (absolute) or PMPM."
+          - name: period_year
+            description: "Calendar year of the statement period."
+          - name: period_month
+            description: "Calendar month number (01-12) of the statement period."
+          - name: value
+            description: "Metric value as string (clean before numeric use)."
+          - name: as_of_date
+            description: "Statement as-of date from the workbook."
+          - name: release_date
+            description: "Reporting period resolved by Prefect content-date logic."
+          - name: source
+            description: "Source workbook filename."
+          - name: loaded_at
+            description: "UTC timestamp when Prefect loaded the row."
+
+      - name: raw_uhc_premiums
+        description: >
+          PAYOR_B premiums sheet from the uhc_financials workbook (sheet_routes PREMIUM).
+          Loaded by Prefect; no staging model yet — loader-grain integrity only.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "PAYOR_B", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename / content."
+          - name: source
+            description: "Source filename."
+          - name: loaded_at
+            description: "UTC timestamp when Prefect loaded the row."
+
+      - name: raw_uhc_rx
+        description: >
+          PAYOR_B pharmacy (Rx) sheet from the uhc_financials workbook (sheet_routes RX).
+          Loaded by Prefect; no staging model yet — loader-grain integrity only.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "PAYOR_B", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename / content."
+          - name: source
+            description: "Source filename."
+          - name: loaded_at
+            description: "UTC timestamp when Prefect loaded the row."
+
+      - name: raw_uhc_financial_pcp_details
+        description: >
+          PAYOR_B PCP financial settlement (shared-risk reconciliation). Carries the
+          contract economics: BCR budget at 85% of revenue (bcr_budget_85_00),
+          actual BCR, total medical costs, provider surplus/deficit share, star
+          bonus, reinsurance, payment cap, and 80%/100% reconciliation columns.
+          Settlement rows are catagory='details'/sr='2' (mirrored by catagory='Total');
+          the remaining rows are blank per-provider detail. All columns are strings.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: network_name
+            description: "Provider network (e.g. Healthcare Org)."
+          - name: catagory
+            description: "Row class: 'details' / 'Total' carry settlement; others blank. (sic: misspelled in source.)"
+          - name: cms_revenue_cy
+            description: "CMS revenue for the contract year (string; clean before use)."
+          - name: bcr_budget_85_00
+            description: "Medical-cost budget at 85% of total revenue (the BCR target term)."
+          - name: total_medical_costs
+            description: "Actual total medical costs incurred."
+          - name: provider_share_surplus_deficit
+            description: "Provider's shared portion of surplus/deficit vs the BCR budget."
+          - name: payment_cap
+            description: "Settlement payment cap (stop-loss-like ceiling)."
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_herself_attribution_panel
+        description: >
+          Healthcare's quarterly corrective view of who SHOULD be attributed to
+          which Healthcare NPI within the PAYOR_B H2001 Medicare Advantage contract.
+          Files arrive as 'Healthcare Health_<Month> Roster.xlsx' in the MSSP
+          SharePoint folder (legacy naming) but are NOT a CMS MSSP roster -- per
+          Salesforce Primary_Payor__c, ~79% of these patients are PAYOR_B MA, only
+          ~1% are Original Medicare. The file is used as an override source for
+          the PAYOR_B attributed_provider_npi when Healthcare disagrees with
+          raw_uhc_members' attribution (which sometimes lists VendorBlue NPIs
+          that Healthcare disputes). All rows have Healthcare TIN by construction.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: mbr_mbi
+            description: "Patient MBI (used as deterministic key)"
+          - name: assoc_prov_npi
+            description: "Healthcare NPI claimed by the panel (always 10-digit)"
+          - name: assoc_prov_tin
+            description: "Healthcare TIN (always 883504663 or other Healthcare TIN variants)"
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_risk_adj
+        description:
+          "PAYOR_A Risk Adjustment (Gap Closure) reports. Monthly Excel files
+          with RAF scores, suspect conditions, and gap closure rates per
+          member."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_quality_members
+        description:
+          "PAYOR_A Quality Member Lists. Monthly Excel files with HEDIS/Stars
+          quality gap data per member."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_mao
+        description: >
+          PAYOR_A CMS MAO-004 encounter report. One row per encounter with a primary
+          diagnosis (diag_cd) plus up to 37 additional diagnoses, each carrying an
+          add/delete flag (add_or_dlt*_flag). allow_disallow_flag is the CMS
+          risk-adjustment filtering result at the record level (A=allowed,
+          D=disallowed, N=not applicable). Keyed on payor_alphamn_pers_id; plan_subm_dt
+          and svc_strt_dt are YYYYMMDD strings.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_mmr
+        description:
+          "PAYOR_A MMR (CMS Monthly Membership Reports). Monthly CSV files with
+          CMS membership data."
+        config:
+          loaded_at_field: "CAST(release_date AS TIMESTAMP)"
+          # Evidence (DEV-4549): median release gap ~31d, p95 ~104d.
+          freshness:
+            warn_after: { count: 120, period: day }
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_morj
+        description: "PAYOR_A MORJ (CMS Model Output Reports - J-code). Monthly CSV files."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_morm
+        description: "PAYOR_A MORM (CMS Model Output Reports - M-code). Monthly CSV files."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_mao
+        description: >
+          PAYOR_B CMS MAO-004 encounter report. One row per encounter with a primary
+          diagnosis plus up to 37 additional (diag1..diag37). allow_disallow_flag
+          is the CMS risk-adjustment filtering result at the record level
+          (A=allowed, D=disallowed, N=not applicable). Keyed on mbi.
+          Date tokens (from_dt / through_dt / transaction_dt) arrive as Excel ISO
+          timestamps or native ECG SFTP DDMMMYYYY; release_date is the grounding
+          period from the filename (not receipt time).
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: from_dt
+            description: "Service start token (ISO timestamp or DDMMMYYYY)"
+          - name: through_dt
+            description: "Service end token (ISO timestamp or DDMMMYYYY)"
+          - name: transaction_dt
+            description: "Plan submission / transaction date token"
+          - name: payment_date
+            description: "Payment period token (often YYYYMM on PAYOR_B MAO)"
+          - name: release_date
+            description: "Grounding reporting period extracted from filename (YYYY-MM-DD)"
+            tests: [not_null]
+          - name: source
+            description: "Source filename for lineage / conservation tests"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_clinical_data
+        description: "PAYOR_A Clinical Data Exchange files. Pipe-delimited TXT with
+          clinical measures and care gap data."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_pcor
+        description:
+          "PAYOR_B Patient Care Opportunity Reports (PCOR). Monthly Excel files
+          with quality gaps and care opportunities per member."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_quality_gaps
+        description:
+          "PAYOR_B quality gap reports (Yellow List, Statin Gap, KMOR, Suspect
+          Roster, Measure Workbook). Multiple report subtypes in one table."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_uhc_mor
+        description:
+          "PAYOR_B MOR (CMS V28 Model Output Report). Pipe-delimited monthly file
+          (HERSELF_MOR_V28_YTD_THRU_<Mon>_<Year>.txt). One row per member (keyed
+          on MBI). The demographic (age_group_*), disease (disease_coefficients_hcc*)
+          and interaction (disease_interactions_*) columns are 0/1 PRESENCE flags
+          (which factors CMS paid on), not coefficient dollar values. Also carries
+          medicaid (dual), originally_disabled_*, hcc_version and payment_date.
+          PAYOR_B analogue of raw_payor_alpha_mor for HCC/status flags — NOT the MMR
+          payment file (that is raw_uhc_revenue)."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: mbi
+            description: "Medicare Beneficiary Identifier (member key)"
+          - name: medicaid
+            description: "CMS Medicaid/dual indicator (1 = dual)"
+          - name: payment_date
+            description: "CMS payment period (YYYYMM)"
+          - name: hcc_version
+            description: "CMS HCC model version (e.g. V28)"
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_index
+        description: "PAYOR_A quarterly cost index reports. Excel files with cost
+          utilization indices by category."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_index_etg
+        description:
+          "PAYOR_A ETG procedure-level index reports. Quarterly Excel files with
+          MPC/ETG procedure cost breakdowns."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_care_gaps
+        description: >
+          PAYOR_A care gaps feed from the Prefect registry (care_gaps report_type).
+          Loaded by Prefect; staging not yet enabled — loader-grain integrity only.
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "PAYOR_A", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename / content."
+          - name: source
+            description: "Source filename."
+          - name: loaded_at
+            description: "UTC timestamp when Prefect loaded the row."
+
+      - name: raw_payor_alpha_summary
+        description:
+          "PAYOR_A quarterly summary reports. High-level utilization and cost
+          summaries."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_outflow
+        description: "PAYOR_A outflow reports. Quarterly Excel files tracking care
+          delivered outside the attributed network."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_outflow_detail
+        description:
+          "PAYOR_A outflow detail reports. Quarterly Excel files with line-level
+          outflow utilization details."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_stars
+        description:
+          "PAYOR_A STARS quality measure reports. CSV files with HEDIS/Stars
+          measure data (BCS, CBP, HbA1c)."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_alpha_specialty_etg
+        description:
+          "PAYOR_A Specialty ETG Total Cost Index Ranking reports. Annual Excel
+          files with specialty cost benchmarking."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_delta_care_gaps
+        description:
+          "Payor Delta care gap and attribution reports. Excel files with
+          quality measure gaps and PCP attribution."
+        # Feeds patients.is_attributed (Payor Delta leg) via empi_payor_matches.
+        # Quarterly/pilot cadence — warn-only (error_after: null) so the code
+        # deploy is not blocked between deliveries. See raw_payor_alpha_members rationale.
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 3240, period: hour }  # ~135d (quarterly cadence + slack)
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_payor_gamma_roster
+        description:
+          "PAYOR_C 2025 Pilot Program patient roster membership. Excel files
+          with member demographics and enrollment."
+        # Feeds patients.is_attributed (PAYOR_C leg) via empi_payor_matches.
+        # Pilot/irregular cadence — warn-only (error_after: null) so the code
+        # deploy is not blocked between deliveries. See raw_payor_alpha_members rationale.
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 3240, period: hour }  # ~135d (quarterly/pilot cadence + slack)
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_vendorblue_aco
+        description:
+          "VendorBlue ACO settlement, benchmark, and quarterly expenditure
+          reports. Excel files from CMS ACO program."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      # Manual / occasional VendorBlue Attribution/*.xlsx (top-level, non-MSSP
+      # Overview) land here via Prefect. Table may be absent until first load —
+      # keep loader_grain disabled so ADF dbtf does not TABLE_OR_VIEW_NOT_FOUND.
+      # Re-enable the test (and staging enabled=true) after first successful import.
+      - name: raw_vendorblue_attribution
+        description:
+          "VendorBlue prospective attribution roster for ACO participation.
+          Excel files with attributed member lists (manual/occasional drops)."
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                enabled: false
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_mssp_roster
+        description:
+          "MSSP (Medicare Shared Savings Program) attribution roster. Excel
+          files with attributed member lists. Also receives VendorBlue
+          'MSSP Attribution Overview' files from SharePoint Attribution/."
+        # Feeds patients.is_attributed (MSSP→MEDICARE leg) via empi_payor_matches.
+        # Quarterly VendorBlue roster cadence — 96h hard error permanently reds CD
+        # between deliveries. Warn for visibility; widen error to ~45d.
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 1080, period: hour }  # ~45d
+            error_after: { count: 2160, period: hour } # ~90d (quarterly + slack)
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+
+      - name: raw_aha_roster
+        description:
+          "AHA (Payor Epsilon Health / Payor_Epsilon) attributed members roster. Medicare
+          Advantage members with MBI, demographics, and risk scores."
+        # AHA attribution roster (EMPI matcher input). Monthly cadence — warn-only
+        # (error_after: null) so the code deploy is not blocked between deliveries.
+        # See raw_payor_alpha_members rationale.
+        config:
+          loaded_at_field: "CAST(loaded_at AS TIMESTAMP)"
+          freshness:
+            warn_after: { count: 1080, period: hour }  # ~45d (monthly cadence + slack)
+            error_after: null
+        tests:
+          - raw_source_loader_grain:
+              arguments:
+                source_column: source
+              config:
+                severity: warn
+                tags: ["payor", "reconciliation", "loader_grain"]
+        columns:
+          - name: release_date
+            description: "Reporting period extracted from filename"
+          - name: loaded_at
+            description: "UTC timestamp when row was loaded by Prefect"
+  # ============================================
+  # NOTE: attribution_medicare source is defined in _sources_integration.yml
+  # NOTE: Removed system source (Databricks billing) - requires metastore admin
+  # NOTE: Removed RAF source (vl_* views) - reference unavailable Snowflake TWICE database
+  # ============================================

@@ -1,0 +1,1368 @@
+version: 2.1
+
+# ============================================================================
+# CircleCI — dbt BI Pipeline (sole CI/CD — Bitbucket removed)
+# ============================================================================
+#
+# SemanticLayer semantic layer removed 2026-06 — AKS cube workloads were scaled to 0
+# since ~Feb 2026; the BI path is now marts_bi_v3 → ServingDB → BIPlatform GraphQL.
+#
+# PR workflow (parallel fast-feedback, READ-ONLY — no database writes):
+#   lint ──────────────────────────┐
+#   full-refresh-guard ────────────┤
+#   seed-integrity-guard ──────────┼─► slim-ci (compile + test only)
+#   validate ──► mdm-compliance ───┘
+#
+# Deploy workflow (main):
+#   validate ──► deploy-dbt
+#
+# Daily data quality workflow (main, 3 PM PST / 23:00 UTC):
+#   quality-gate (schema baseline refresh + Elementary + source freshness)
+#   NOTE (DEV-4546): the generic non-Elementary dbt DQ tests were removed from
+#   this gate — they now run once/day in the Prefect databricks-adf-mv-refresh
+#   flow's deferred run_dbtf_tests task (ErrorTracking-alerted to #devalerts), so the
+#   nightly gate no longer duplicates them.
+#
+# NOTE: The legacy nightly docs-catalog workflow (generate-docs:
+#   dbtf parse --write-catalog → catalog.json → Azure Blob) was removed —
+#   dbt Cloud owns docs/catalog generation now. All dbt ops run in dbt Cloud.
+#
+# Key features (v8 — Slim CD code-only, CDF-safe):
+#   • circleci_ip_ranges: true on Azure-touching deploy jobs (deploy-dbt)
+#     → routes traffic through static IPs whitelisted on storage_account storage
+#   • Guards migrated from Bitbucket: full-refresh, seed-integrity, MDM compliance
+#   • Slim CI on PRs — compile + test only (NO dbtf build / DB writes)
+#   • Slim CD on deploys — state:modified+ only (code changes); data refresh is Prefect ADF's job
+#   • No source_status:fresher+ — removed to avoid rebuilding data that Prefect ADF handles
+#   • Production manifest uploaded to Azure Blob after each deploy (Prefect ADF also uploads)
+#   • CDF-safe: enable_cdf_after_build scoped to table materialization only (incremental MERGE preserves CDF)
+#   • Nightly full Elementary and dbt data-quality checks (scheduled)
+#   • Aggressive caching — pip + dbt packages
+# ============================================================================
+
+parameters:
+  dbt-version:
+    type: string
+    default: "1.11.4"
+  force-full-build:
+    type: boolean
+    default: false
+
+# ---------------------------------------------------------------------------
+# Executors
+# ---------------------------------------------------------------------------
+executors:
+  dbt-executor:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/project
+    # large (4 vCPU / 8GB): dbtf parse/compile over the full model graph is
+    # CPU+memory bound and sits on the deploy critical path before the
+    # (external) dbt Cloud run. medium was the bottleneck / OOM risk.
+    resource_class: large
+
+  deploy-executor:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/project
+    resource_class: large
+
+# ---------------------------------------------------------------------------
+# Reusable Commands
+# ---------------------------------------------------------------------------
+commands:
+  setup-dbt:
+    description:
+      "Install dbt Fusion (dbtf), dbt-databricks for SQLFluff, restore
+      caches, dbtf deps"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - pip-v3-{{ checksum "packages.yml" }}
+            - pip-v3-
+      - restore_cache:
+          keys:
+            - dbt-pkgs-v2-{{ checksum "packages.yml" }}
+            - dbt-pkgs-v2-
+      - run:
+          name: Install dbt-databricks (Python — SQLFluff templater)
+          command: |
+            pip install --upgrade pip --quiet
+            pip install dbt-databricks==<< pipeline.parameters.dbt-version >> --quiet
+      - save_cache:
+          key: pip-v3-{{ checksum "packages.yml" }}
+          paths:
+            - ~/.cache/pip
+      - run:
+          name: Install dbt Fusion CLI
+          command: |
+            set -euxo pipefail
+            export SHELL=/bin/bash
+            curl -fsSL https://your-dbt-cloud-url/... | sh -s -- --update
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+            export PATH="$HOME/.local/bin:$PATH"
+            ln -sf "$HOME/.local/bin/dbt" "$HOME/.local/bin/dbtf"
+            dbtf --version
+      - run:
+          name: Install dbt packages (dbtf deps)
+          command: |
+            export PATH="$HOME/.local/bin:$PATH"
+            dbtf deps
+      - save_cache:
+          key: dbt-pkgs-v2-{{ checksum "packages.yml" }}
+          paths:
+            - dbt_packages/
+
+  setup-azure:
+    description: "Install Azure CLI + kubectl, authenticate for AKS"
+    steps:
+      - run:
+          name: Install Azure CLI
+          command: |
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - run:
+          name: Install kubectl
+          command: |
+            KUBECTL_VERSION="v1.29.2"
+            curl -sLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - run:
+          name: Azure login + AKS credentials
+          command: |
+            az login --service-principal \
+              -u "AZURE__REDACTED" \
+              -p "AZURE__REDACTED" \
+              --tenant "AZURE__REDACTED"
+            az account set --subscription "AZURE__REDACTED"
+            az aks get-credentials \
+              --resource-group "AKS__REDACTED" \
+              --name "AKS__REDACTED" \
+              --overwrite-existing
+
+  trigger-dbt-cloud-job:
+    description: "Trigger a dbt Cloud job + poll for completion + download artifacts"
+    parameters:
+      job-id:
+        type: string
+        description: "Numeric dbt Cloud job ID (see dbt/dbt_cloud.yml for project)"
+      cause:
+        type: string
+        default: "CircleCI ${CIRCLE_JOB} on ${CIRCLE_BRANCH}@${CIRCLE_SHA1:0:8}"
+      timeout-minutes:
+        type: integer
+        default: 90
+      ci-isolation-arg:
+        type: string
+        default: ""
+        description:
+          "PR-validation runs only: set to '--ci-isolation' so the dbt Cloud run
+          builds into an isolated dbt_cloud_pr_* schema (never prod). MUST stay
+          empty for deploy/merge jobs, which intentionally build prod."
+      steps-override-args:
+        type: string
+        default: ""
+        description:
+          "Optional --steps-override flags for trigger_dbt_cloud_job.py. Deploy
+          prepends `dbt seed --select state:modified+` before `dbt run` so new
+          seeds materialize in prod (TIC-7908)."
+    steps:
+      - run:
+          name: Install dbt Cloud trigger dependencies
+          command: |
+            pip install --quiet --user requests pyyaml
+      - run:
+          name: "Trigger dbt Cloud job << parameters.job-id >>"
+          no_output_timeout: 135m
+          command: |
+            # Hard 135m ceiling above is CircleCI's safety net; the trigger
+            # script enforces its own timeout-minutes parameter independently.
+            # (Ceiling must be >= the largest per-job timeout-minutes below.)
+            #
+            # Secrets (YOUR_DBT_TOKEN, PRODUCTANALYTICS_*, …) come from your-secret-manager
+            # project `dbt` (YOUR_PROJECT_ID
+            # into this CircleCI *project* env — not via `your-secret-manager run` /
+            # a missing `your-secret-manager` context (that hung slim-ci/deploy for 135m).
+            mkdir -p target logs
+            : "${YOUR_DBT_TOKEN:?YOUR_DBT_TOKEN missing — check your-secret-manager dbt→CircleCI sync}"
+            python3 scripts/trigger_dbt_cloud_job.py "<< parameters.job-id >>" \
+              --cause "<< parameters.cause >>" \
+              --timeout-minutes "<< parameters.timeout-minutes >>" \
+              << parameters.ci-isolation-arg >> \
+              << parameters.steps-override-args >>
+
+  upload-manifest-to-blob:
+    description:
+      "Upload dbt manifest + sources to Azure Blob (for Slim CI/CD state
+      comparison)"
+    parameters:
+      version-tag:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Upload manifest and sources to Azure Blob Storage
+          command: |
+            set +e
+            VERSION="<< parameters.version-tag >>"
+
+            az storage blob upload \
+              --account-name "AZURE__REDACTED" \
+              --account-key "AZURE__REDACTED" \
+              --container-name dbt-manifests \
+              --file target/manifest.json \
+              --name manifest.json \
+              --overwrite --no-progress 2>&1
+            AZ_EXIT=$?
+
+            if [ $AZ_EXIT -ne 0 ]; then
+              echo "WARNING: Azure Blob upload failed (exit $AZ_EXIT) — likely blocked by network rules"
+              echo "Continuing — manifest still needed for Slim CI/CD state comparison"
+              exit 0
+            fi
+
+            if [ -n "$VERSION" ]; then
+              az storage blob upload \
+                --account-name "AZURE__REDACTED" \
+                --account-key "AZURE__REDACTED" \
+                --container-name dbt-manifests \
+                --file target/manifest.json \
+                --name "versions/manifest-${VERSION}.json" \
+                --overwrite --no-progress
+            fi
+
+            MODEL_COUNT=$(python3 -c "import json; m=json.load(open('target/manifest.json')); print(len([k for k in m.get('nodes',{}) if m['nodes'][k].get('resource_type')=='model']))")
+            echo "Azure Blob: uploaded manifest (${MODEL_COUNT} models)"
+
+            if [ -f "target/sources.json" ]; then
+              az storage blob upload \
+                --account-name "AZURE__REDACTED" \
+                --account-key "AZURE__REDACTED" \
+                --container-name dbt-manifests \
+                --file target/sources.json \
+                --name sources.json \
+                --overwrite --no-progress 2>&1 \
+                && echo "Azure Blob: uploaded sources.json" \
+                || echo "WARNING: sources.json upload failed — source_status:fresher+ may not work on next run"
+            else
+              echo "No target/sources.json found — skipping sources upload"
+            fi
+
+  install-errortracking-sdk:
+    description: "Install errortracking-sdk + productanalytics for failure reporting + cron check-ins"
+    steps:
+      - run:
+          name: Install errortracking-sdk + productanalytics
+          command: pip install --quiet "errortracking-sdk>=2.0,<3.0" "productanalytics>=7.0,<8.0"
+
+  report-dbt-to-errortracking:
+    description:
+      "Parse target/run_results.json + sources.json and emit per-failure
+      events to ErrorTracking (via YOUR_ERROR_TRACKING_DSN) and/or the ProductAnalytics dbt project
+      (dual-write controlled by ERROR_BACKEND, default both)"
+    parameters:
+      job-context:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Report dbt failures/warnings to ErrorTracking + ProductAnalytics
+          when: always
+          command: |
+            # YOUR_ERROR_TRACKING_DSN points at ErrorTracking (ErrorTracking-compatible SDK wire protocol).
+            if [ -z "${YOUR_ERROR_TRACKING_DSN:-}" ] && [ -z "${YOUR_ANALYTICS_KEY:-}" ]; then
+              echo "Neither YOUR_ERROR_TRACKING_DSN nor YOUR_ANALYTICS_KEY set — skipping dbt reporter"
+              exit 0
+            fi
+            JOB_CTX="<< parameters.job-context >>"
+            if [ -z "$JOB_CTX" ]; then
+              JOB_CTX="${CIRCLE_JOB:-dbt}"
+            fi
+            python3 scripts/dbt_errortracking_reporter.py \
+              --run-results target/run_results.json \
+              --sources target/sources.json \
+              --job-context "$JOB_CTX" || true
+
+  report-productanalytics-pipeline-event:
+    description:
+      "Emit a pipeline-level ProductAnalytics summary event (status pass/fail + node
+      counts + duration from target/run_results.json) to the ProductAnalytics dbt
+      project. Defensive no-op without YOUR_ANALYTICS_KEY; never fails the
+      job (when: always). Complements report-dbt-to-errortracking, which emits
+      per-failed-node events; this emits ONE rollup event per job."
+    parameters:
+      event:
+        type: string
+        description: "ProductAnalytics event name, e.g. dbt_pr_build_complete / dbt_deploy_complete"
+      job-context:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: "ProductAnalytics pipeline event: << parameters.event >>"
+          when: always
+          command: |
+            if [ -z "${YOUR_ANALYTICS_KEY:-}" ] && [ -z "${YOUR_ANALYTICS_API_KEY:-}" ]; then
+              echo "YOUR_ANALYTICS_KEY not set — skipping ProductAnalytics pipeline event"
+              exit 0
+            fi
+            # Ensure the SDK is present even if this runs after a failed step
+            # that skipped install-errortracking-sdk (which is when:on_success). Cheap
+            # + cached; the script itself no-ops if the import still fails.
+            pip install --quiet "productanalytics>=7.0,<8.0" 2>/dev/null || true
+            JOB_CTX="<< parameters.job-context >>"
+            if [ -z "$JOB_CTX" ]; then JOB_CTX="${CIRCLE_JOB:-dbt}"; fi
+            # status auto-derives from run_results (errored>0 -> fail; missing
+            # results -> fail). The script always exits 0.
+            python3 scripts/productanalytics_ci_events.py \
+              --event "<< parameters.event >>" \
+              --run-results target/run_results.json \
+              --job-context "$JOB_CTX" || true
+
+  errortracking-cron-start:
+    description:
+      "POST ErrorTracking uptime heartbeat (dbt-ci-pipeline) + optional ProductAnalytics
+      heartbeat. CLI status=in_progress is ignored by ErrorTracking (same POST as
+      finish). URL from YOUR_MONITORING_HEARTBEAT or
+      GLITCHTIP_HEARTBEATS_JSON."
+    parameters:
+      slug:
+        type: string
+      schedule:
+        type: string
+      max-runtime-min:
+        type: integer
+        default: 60
+      checkin-margin-min:
+        type: integer
+        default: 15
+      productanalytics-event:
+        type: string
+        default: ""
+        description:
+          "ProductAnalytics heartbeat event name (e.g. dbt_nightly_quality_gate). Empty
+          disables the ProductAnalytics beat."
+    steps:
+      - run:
+          name: "ErrorTracking heartbeat + ProductAnalytics: start (<< parameters.slug >>)"
+          command: |
+            # Always record the start timestamp so finish can compute duration
+            # for ProductAnalytics, even when ErrorTracking heartbeat URL is unset.
+            date +%s > /tmp/errortracking-checkin-start-<< parameters.slug >>
+            PH_ARG=""
+            if [ -n "<< parameters.productanalytics-event >>" ]; then
+              PH_ARG="--productanalytics-event << parameters.productanalytics-event >>"
+            fi
+            # Heartbeat URL via YOUR_MONITORING_HEARTBEAT or
+            # GLITCHTIP_HEARTBEATS_JSON["dbt-ci-pipeline"]. YOUR_ERROR_TRACKING_DSN is for
+            # dbt_errortracking_reporter (ErrorTracking-compatible), not cron check-ins.
+            if [ -z "${YOUR_MONITORING_HEARTBEAT:-}" ] && [ -z "${GLITCHTIP_HEARTBEATS_JSON:-}" ] && [ -z "${YOUR_ANALYTICS_KEY:-}" ] && [ -z "${YOUR_ANALYTICS_API_KEY:-}" ]; then
+              echo "Neither ErrorTracking heartbeat URL nor PRODUCTANALYTICS_* set — skipping cron heartbeat"
+              echo "skipped" > /tmp/errortracking-checkin-id-<< parameters.slug >>
+              exit 0
+            fi
+            CHECKIN_ID=$(python3 scripts/errortracking_cron_checkin.py \
+              --slug "<< parameters.slug >>" \
+              --status in_progress \
+              --schedule "<< parameters.schedule >>" \
+              --max-runtime-min << parameters.max-runtime-min >> \
+              --checkin-margin-min << parameters.checkin-margin-min >> \
+              $PH_ARG 2>/dev/null || echo "")
+            echo "$CHECKIN_ID" > /tmp/errortracking-checkin-id-<< parameters.slug >>
+            echo "ErrorTracking heartbeat in_progress: id=${CHECKIN_ID}"
+
+  errortracking-cron-finish:
+    description:
+      "POST ErrorTracking uptime heartbeat on finish (ok/error status ignored —
+      same heartbeat POST). Optional ProductAnalytics beat with status=ok/error."
+    parameters:
+      slug:
+        type: string
+      productanalytics-event:
+        type: string
+        default: ""
+        description:
+          "ProductAnalytics heartbeat event name (e.g. dbt_nightly_quality_gate). Empty
+          disables the ProductAnalytics beat."
+    steps:
+      - run:
+          name: "ErrorTracking heartbeat + ProductAnalytics: finish ok (<< parameters.slug >>)"
+          when: on_success
+          command: |
+            PH_ARG=""
+            if [ -n "<< parameters.productanalytics-event >>" ]; then
+              PH_ARG="--productanalytics-event << parameters.productanalytics-event >>"
+            fi
+            if [ -z "${YOUR_MONITORING_HEARTBEAT:-}" ] && [ -z "${GLITCHTIP_HEARTBEATS_JSON:-}" ] && [ -z "${YOUR_ANALYTICS_KEY:-}" ] && [ -z "${YOUR_ANALYTICS_API_KEY:-}" ]; then exit 0; fi
+            CHECKIN_ID=$(cat /tmp/errortracking-checkin-id-<< parameters.slug >> 2>/dev/null || echo "")
+            START_TS=$(cat /tmp/errortracking-checkin-start-<< parameters.slug >> 2>/dev/null || echo "")
+            DUR=""
+            if [ -n "$START_TS" ]; then DUR="--duration-s $(( $(date +%s) - START_TS ))"; fi
+            python3 scripts/errortracking_cron_checkin.py \
+              --slug "<< parameters.slug >>" \
+              --status ok \
+              --check-in-id "$CHECKIN_ID" $DUR $PH_ARG || true
+      - run:
+          name: "ErrorTracking heartbeat + ProductAnalytics: finish error (<< parameters.slug >>)"
+          when: on_fail
+          command: |
+            PH_ARG=""
+            if [ -n "<< parameters.productanalytics-event >>" ]; then
+              PH_ARG="--productanalytics-event << parameters.productanalytics-event >>"
+            fi
+            if [ -z "${YOUR_MONITORING_HEARTBEAT:-}" ] && [ -z "${GLITCHTIP_HEARTBEATS_JSON:-}" ] && [ -z "${YOUR_ANALYTICS_KEY:-}" ] && [ -z "${YOUR_ANALYTICS_API_KEY:-}" ]; then exit 0; fi
+            CHECKIN_ID=$(cat /tmp/errortracking-checkin-id-<< parameters.slug >> 2>/dev/null || echo "")
+            START_TS=$(cat /tmp/errortracking-checkin-start-<< parameters.slug >> 2>/dev/null || echo "")
+            DUR=""
+            if [ -n "$START_TS" ]; then DUR="--duration-s $(( $(date +%s) - START_TS ))"; fi
+            python3 scripts/errortracking_cron_checkin.py \
+              --slug "<< parameters.slug >>" \
+              --status error \
+              --check-in-id "$CHECKIN_ID" $DUR $PH_ARG || true
+
+  trigger-servingdb-sync:
+    description:
+      "Trigger Prefect servingdb-dab-sync after dbt deploy for the 11-table
+      ServingDB retain set (Excel ODBC + scorecard mirrors). pg_graphql
+      annotations and BIPlatform v3-diagnostics are retired (DEV-4569)."
+    steps:
+      - run:
+          name: Trigger Prefect servingdb-dab-sync deployment
+          when: always
+          command: |
+            : > /tmp/servingdb_sync_flow_run.id
+            if [ -z "${PREFECT_API_URL:-}" ] || [ -z "${PREFECT_API_KEY:-}" ]; then
+              echo "PREFECT_API_URL/PREFECT_API_KEY not set — skipping servingdb-dab-sync trigger"
+              exit 0
+            fi
+
+            # Resolve deployment id by name (avoids hardcoding UUIDs)
+            DEP_ID=$(curl -sf -X POST \
+              -H "Authorization: Bearer PREFECT_API_KEY_REDACTED" \
+              -H "Content-Type: application/json" \
+              -d '{"deployments": {"name": {"any_": ["servingdb-dab-sync"]}}, "limit": 1}' \
+              "${PREFECT_API_URL%/}/deployments/filter" \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+
+            if [ -z "$DEP_ID" ]; then
+              echo "WARN: servingdb-dab-sync deployment not found via filter API — skipping"
+              exit 0
+            fi
+
+            echo "Triggering servingdb-dab-sync deployment $DEP_ID after dbt deploy ${CIRCLE_SHA1:0:8}"
+            HTTP_CODE=$(curl -s -o /tmp/flow_run.json -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer PREFECT_API_KEY_REDACTED" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"post-deploy-dbt-${CIRCLE_SHA1:0:8}\",\"parameters\":{\"dry_run\":false},\"tags\":[\"circleci\",\"post-deploy-dbt\"]}" \
+              "${PREFECT_API_URL%/}/deployments/${DEP_ID}/create_flow_run")
+
+            if [ "$HTTP_CODE" = "201" ]; then
+              FLOW_RUN_ID=$(python3 -c "import json; print(json.load(open('/tmp/flow_run.json')).get('id',''))")
+              echo "servingdb-dab-sync flow run created: $FLOW_RUN_ID"
+              echo "$FLOW_RUN_ID" > /tmp/servingdb_sync_flow_run.id
+            else
+              echo "WARN: Prefect API returned HTTP $HTTP_CODE — servingdb-dab-sync not triggered (next cron at 10:00 UTC)"
+              cat /tmp/flow_run.json || true
+            fi
+
+  trigger-BIPlatform-diagnostics:
+    description:
+      "After servingdb-sync completes, fire the BIPlatform v3-diagnostics-on-demand
+      workflow via GitHub repository_dispatch. The BIPlatform workflow runs the
+      /api/bi/v3/diagnostics gate against prod, which catches the class of
+      schema drift the dbt build itself cannot detect — for example a metric
+      that was removed from metric_definitions but is still referenced by a
+      stored ChartSpec. Requires GITHUB_TOKEN_BI_DISPATCH in the context
+      (PAT with actions:write on Healthcare-health/BIPlatform)."
+    steps:
+      - run:
+          name: Wait for servingdb-sync to complete + dispatch BIPlatform diagnostics
+          when: always
+          no_output_timeout: 20m
+          command: |
+            if [ -z "${GITHUB_TOKEN_BI_DISPATCH:-}" ]; then
+              echo "GITHUB_TOKEN_BI_DISPATCH not set — skipping diagnostics dispatch"
+              echo "    (Add a PAT to the orchestration-context context with actions:write on Healthcare-health/BIPlatform"
+              echo "     to enable the post-dbt-deploy V3 contract gate.)"
+              exit 0
+            fi
+
+            # Pull the flow run id captured by trigger-servingdb-sync. Empty
+            # file means the Prefect trigger was skipped (no creds) — fire
+            # the dispatch immediately and let the BIPlatform job's own healthz
+            # wait gate timing.
+            FLOW_RUN_ID=$(cat /tmp/servingdb_sync_flow_run.id 2>/dev/null || echo "")
+
+            if [ -n "$FLOW_RUN_ID" ] && [ -n "${PREFECT_API_URL:-}" ] && [ -n "${PREFECT_API_KEY:-}" ]; then
+              echo "Polling Prefect flow run $FLOW_RUN_ID until terminal state (15 min deadline)..."
+              deadline=$((SECONDS + 900))
+              STATE="PENDING"
+              while true; do
+                STATE=$(curl -sf -H "Authorization: Bearer PREFECT_API_KEY_REDACTED" \
+                  "${PREFECT_API_URL%/}/flow_runs/${FLOW_RUN_ID}" \
+                  | python3 -c "import json,sys; print(json.load(sys.stdin).get('state',{}).get('type',''))" 2>/dev/null || echo "UNKNOWN")
+                case "$STATE" in
+                  COMPLETED|FAILED|CRASHED|CANCELLED)
+                    echo "  servingdb-sync final state: $STATE"
+                    break
+                    ;;
+                  *)
+                    if [ $SECONDS -ge $deadline ]; then
+                      echo "WARN: servingdb-sync flow $FLOW_RUN_ID did not reach terminal state within 15 min — dispatching diagnostics anyway"
+                      STATE="TIMEOUT"
+                      break
+                    fi
+                    echo "  servingdb-sync state: $STATE (waiting...)"
+                    sleep 20
+                    ;;
+                esac
+              done
+
+              if [ "$STATE" != "COMPLETED" ] && [ "$STATE" != "TIMEOUT" ]; then
+                echo "servingdb-sync did not COMPLETED ($STATE) — skipping diagnostics dispatch."
+                echo "    (Running diagnostics against an incomplete ServingDB state would false-positive."
+                echo "     The Prefect run will ErrorTracking-alert separately; manually re-run the BIPlatform"
+                echo "     workflow_dispatch once ServingDB is healthy.)"
+                exit 0
+              fi
+            else
+              echo "No flow_run_id / Prefect creds — firing diagnostics dispatch immediately."
+              echo "    (The BIPlatform workflow's healthz wait will tolerate ServingDB still warming up,"
+              echo "     but if a recent dbt schema change is in flight, expect a drift report.)"
+            fi
+
+            echo "Dispatching BIPlatform V3 diagnostics workflow against prod (dbt deploy ${CIRCLE_SHA1:0:8})..."
+            HTTP=$(curl -s -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer GITHUB_TOKEN__REDACTED" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/Healthcare-health/BIPlatform/actions/workflows/deploy.yml/dispatches" \
+              -d '{"ref":"main","inputs":{"target":"prod"}}')
+            if [ "$HTTP" = "204" ]; then
+              echo "BIPlatform diagnostics workflow dispatch sent (HTTP 204)."
+              echo "    Watch at: https://github.com/Healthcare-health/BIPlatform/actions"
+            else
+              echo "WARN: GitHub workflow_dispatch returned HTTP $HTTP — diagnostics gate not triggered"
+              cat /tmp/dispatch.json 2>/dev/null || true
+            fi
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+jobs:
+  # ── PR: Validate dbt project (compile, no DB writes) ─────────────────
+  validate:
+    executor: dbt-executor
+    steps:
+      - setup-dbt
+      - run:
+          name: dbtf parse (syntax validation)
+          command: dbtf parse
+      - run:
+          name: dbtf compile (full project)
+          command: dbtf compile
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/manifest.json
+            - target/run_results.json
+            - target/catalog.json
+
+  # ── PR: Lint SQL (non-blocking) ──────────────────────────────────────
+  lint:
+    executor: dbt-executor
+    # medium (2 vCPU / 4GB): SQLFluff is light; usage showed ~24% CPU / ~3% RAM
+    # on large (20 cr/min). medium (10 cr/min) halves lint compute credits.
+    resource_class: medium
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - lint-v2-{{ checksum "packages.yml" }}
+            - lint-v2-
+      - run:
+          name: Install SQLFluff
+          command: pip install sqlfluff sqlfluff-templater-dbt --quiet
+      # Stable key (was lint-v1-{{ epoch }} which never hit and ballooned
+      # STORAGE_CREDITS — ~$5/mo from unique caches every PR).
+      - save_cache:
+          key: lint-v2-{{ checksum "packages.yml" }}
+          paths:
+            - ~/.cache/pip
+      - run:
+          name: Lint SQL models
+          command: |
+            # Non-blocking lint — report issues but don't fail pipeline
+            sqlfluff lint models/ --dialect databricks --format github-annotation 2>&1 | tee /tmp/lint-results.txt || true
+
+            VIOLATION_COUNT=$(grep -c "L0" /tmp/lint-results.txt 2>/dev/null || echo "0")
+            echo "SQLFluff found ${VIOLATION_COUNT} style violations (non-blocking)"
+      - store_artifacts:
+          path: /tmp/lint-results.txt
+          destination: sqlfluff_results
+
+  # ── PR: CodeAnt secrets gate (BLOCKING on any secret, scoped to models/macros) ──
+  # AppSec gate for the dbt project. Scoped to models/ and macros/ so the data
+  # pipeline (Elementary/dbt tests) remains the separate "data quality" gate.
+  # Break-glass: set SKIP_CODEANT_GATE=1 to bypass during a verified outage.
+  #
+  # Required context 'dbt-databricks' must also export:
+  #   - CODEANT_API_TOKEN
+  #   - BITBUCKET_API_TOKEN
+  codeant-gate:
+    docker:
+      - image: cimg/node:22.12
+    resource_class: small
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Install CodeAnt CLI
+          command: |
+            sudo npm install -g codeant-cli
+            codeant --version
+      - run:
+          name: CodeAnt secrets gate (blocking on any detected secret)
+          environment:
+            CI: "1"
+          command: |
+            if [ "${SKIP_CODEANT_GATE:-0}" = "1" ]; then
+              echo "::warning:: SKIP_CODEANT_GATE=1 — CodeAnt secrets gate bypassed (break-glass). This bypass is audited."
+              exit 0
+            fi
+            if [ -z "${CODEANT_API_TOKEN:-}" ] || [ -z "${BITBUCKET_API_TOKEN:-}" ]; then
+              echo "ERROR: CODEANT_API_TOKEN and/or BITBUCKET_API_TOKEN not set in the dbt-databricks context."
+              echo "The base-branch secret diff needs SCM access (BITBUCKET_API_TOKEN)."
+              echo "Add both to the context, or set SKIP_CODEANT_GATE=1 to bypass."
+              exit 1
+            fi
+            export BITBUCKET_TOKEN="${BITBUCKET_API_TOKEN}"
+            # Diff against the PR target branch, NOT CIRCLE_BRANCH (the source
+            # branch) — using the source branch as baseline diffs it against
+            # itself and yields no secret diff. CODEANT_BASE_BRANCH lets a
+            # non-main target override; defaults to main.
+            CODEANT_BASE="${CODEANT_BASE_BRANCH:-main}"
+            echo "Running CodeAnt secrets gate against base '${CODEANT_BASE}'..."
+            # `codeant secrets` has no --fail-on flag; it exits non-zero when
+            # secrets are detected, which fails the job (the gate).
+            codeant secrets --all --base "${CODEANT_BASE}" \
+              --include 'models/**,macros/**,seeds/**,snapshots/**'
+
+  # ── PR: Full Refresh Guard — block full_refresh on CDC/audit models ──
+  full-refresh-guard:
+    executor: dbt-executor
+    steps:
+      - checkout
+      - run:
+          name: "Guard: CDC/audit models must not set full_refresh=true"
+          command: |
+            VIOLATIONS=0
+
+            # ─── Scan 1: legacy path scan — raf/cdc/ models ──────────────────
+            # Append-only event-log models. Belt-and-suspenders alongside Scan 2
+            # since these don't all carry the no_full_refresh tag yet.
+            for f in $(find models/healthcare/raf/score/cdc -name '*.sql' 2>/dev/null || true); do
+              if grep -qiE "full_refresh\s*[:=]\s*(true|True|TRUE)" "$f"; then
+                echo "VIOLATION (Scan 1, legacy CDC): $f contains full_refresh=true"
+                grep -nE "full_refresh" "$f"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+            done
+            for f in $(find models/healthcare/raf/score/cdc -name '*.yml' 2>/dev/null || true); do
+              if grep -qiE "full_refresh:\s*true" "$f"; then
+                echo "VIOLATION (Scan 1, legacy CDC): $f contains full_refresh: true"
+                grep -nE "full_refresh" "$f"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+            done
+
+            # ─── Scan 2: tag-based — any model declaring tag 'no_full_refresh'
+            # must NOT also set full_refresh=true. Generalises Scan 1 across the
+            # whole tree (CDIA, MDM, append-only marts, etc.).
+            for f in $(grep -rlE "['\"]no_full_refresh['\"]" models/ 2>/dev/null || true); do
+              if grep -qiE "full_refresh\s*[:=]\s*(true|True|TRUE)" "$f"; then
+                echo "VIOLATION (Scan 2, tag:no_full_refresh): $f tags no_full_refresh but also sets full_refresh=true"
+                grep -nE "full_refresh|no_full_refresh" "$f"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+            done
+
+            # ─── Scan 3: project-level regression guard — assert dbt_project.yml
+            # keeps +full_refresh: false under the cdia: path. Pure-shell awk
+            # check (no python heredoc — CircleCI YAML parser is fragile around
+            # nested heredocs in command blocks). cdia: only appears once so a
+            # 6-line forward window is sufficient.
+            if ! awk '/^[[:space:]]+cdia:[[:space:]]*$/{f=1;n=0;next} f && /\+full_refresh:[[:space:]]*false/{found=1;exit} f{n++; if(n>6)f=0} END{exit !found}' dbt_project.yml; then
+              echo "VIOLATION (Scan 3, project-level): dbt_project.yml is missing '+full_refresh: false' within 6 lines after cdia:"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+
+            if [ "$VIOLATIONS" -gt 0 ]; then
+              echo ""
+              echo "FAILED: $VIOLATIONS append-only-protection violation(s) found."
+              echo "Append-only models (CDC, CDIA audit, MDM reference_data) must not enable full_refresh."
+              echo "Either remove full_refresh=true, set it to false, or remove the no_full_refresh tag if intentional."
+              exit 1
+            fi
+
+            echo "All 3 scans PASSED: legacy CDC, tag:no_full_refresh, dbt_project.yml cdia: anchor."
+
+  # ── PR: Seed File Integrity Guard ─────────────────────────────────────
+  seed-integrity-guard:
+    executor: dbt-executor
+    steps:
+      - checkout
+      - run:
+          name: "Guard: Seed CSV changes must include METADATA.yml hash updates"
+          command: |
+            # Only enforce hash-bump for seed directories managed by
+            # verify_seed_hashes.py (cms_hcc_v28, raf_reference, provider_bonus).
+            # marts_bi_v3 seeds (metric_definitions.csv, metric_dimensions.csv)
+            # are validated by v3-registry-validate against the dbt manifest,
+            # not by a hash file, so changes there don't need a METADATA bump.
+            HASHED_PATTERN='seeds/(cms_hcc_v28|raf_reference|provider_bonus)/.*\.csv'
+            CSV_CHANGED=$(git diff --name-only origin/main...HEAD | grep -cE "$HASHED_PATTERN" || true)
+            META_CHANGED=$(git diff --name-only origin/main...HEAD | grep -c 'METADATA\.yml' || true)
+
+            echo "Hashed seed CSVs changed: $CSV_CHANGED"
+            echo "METADATA.yml changed: $META_CHANGED"
+
+            if [ "$CSV_CHANGED" -gt 0 ] && [ "$META_CHANGED" -eq 0 ]; then
+              echo ""
+              echo "FAILED: Hashed seed CSV files changed but METADATA.yml was not updated."
+              echo "Changed seed files:"
+              git diff --name-only origin/main...HEAD | grep -E "$HASHED_PATTERN"
+              echo ""
+              echo "Run: python scripts/verify_seed_hashes.py --update"
+              exit 1
+            fi
+
+            # If METADATA.yml exists, validate hashes
+            if [ -f "seeds/cms_hcc_v28/METADATA.yml" ]; then
+              pip install -q pyyaml > /dev/null 2>&1
+              python scripts/verify_seed_hashes.py
+              echo "Seed checksums validated. PASSED."
+            else
+              echo "No METADATA.yml found — skipping checksum validation."
+            fi
+
+  # ── PR: CI Schema-Isolation Safety Guard ──────────────────────────────
+  # Source-based guard (no manifest needed) that fails the PR if any config
+  # bypasses dbt Cloud's schema_override PR isolation: snapshots using
+  # `target_schema=` (hard schema pin), or models/snapshots/dbt_project.yml
+  # hard-pinning `database=`/`+database:` to a non-default catalog. Both
+  # patterns leaked toward prod and broke earlier PR runs; this stops the
+  # class of regression at review time. See scripts/check_ci_isolation_safety.py.
+  ci-isolation-guard:
+    executor: dbt-executor
+    steps:
+      - checkout
+      - run:
+          name: "Guard: configs must not bypass CI/PR schema isolation"
+          command: python3 scripts/check_ci_isolation_safety.py
+
+  # ── PR: Test suite lint + boundary coverage registry ─────────────────
+  # Static (no warehouse). Blocks vacuous not_null / 1=1 placeholders;
+  # boundary registry starts warn-only until gaps are closed project-wide.
+  test-lint-guard:
+    executor: dbt-executor
+    steps:
+      - checkout
+      - run:
+          name: Install pyyaml
+          command: pip install -q pyyaml
+      - run:
+          name: "Guard: dbt test lint (vacuous filters, placeholder 1=1)"
+          command: python3 scripts/check_test_lint.py
+      - run:
+          name: "Boundary coverage registry (warn-only)"
+          command: |
+            python3 scripts/check_boundary_coverage.py --warn-only \
+              || echo "WARNING: boundary coverage gaps remain (non-blocking)."
+
+  # ── PR: Metric-view fidelity guard ────────────────────────────────────
+  # Two checks, both pure-Python (no dbt/warehouse):
+  #  1. Drift guard — the committed metric_views/metric_views.sql +
+  #     metrics_bi_v3_catalog.json must match the registry seeds. Forces the
+  #     author to regenerate after editing metric_definitions/_dimensions.csv.
+  #  2. .lvdash.json linter — any committed Databricks AI/BI dashboard spec must
+  #     query metric views via MEASURE() with registered measures + whitelisted
+  #     dimensions, never hand-aggregate raw marts. See docs/METRIC_VIEWS.md.
+  metric-views-guard:
+    executor: dbt-executor
+    steps:
+      - checkout
+      - run:
+          name: "Drift guard: metric-view artifacts match the registry seeds"
+          command: python3 scripts/metric_views/generate_metric_views.py --check
+      - run:
+          name: "Fidelity linter: .lvdash.json datasets use the metric views"
+          command: python3 scripts/metric_views/lint_lvdash.py metric_views/
+      - run:
+          # Contract coverage: report which mart columns the committed
+          # dashboards depend on and whether each is under an ENFORCED dbt
+          # contract. WARN-ONLY for now (|| true) — surfaces unprotected
+          # dashboard-critical columns without blocking the PR. Promote to a
+          # hard gate (drop `|| true`) once every backing mart is on contract.
+          name: "Contract coverage (warn): dashboards vs enforced contracts"
+          command: |
+            python3 scripts/metric_views/dashboard_contract_coverage.py dashboards/src --check \
+              || echo "WARNING: dashboard-critical columns are not yet on an enforced contract (non-blocking)."
+
+  # ── PR: MDM Compliance Check ──────────────────────────────────────────
+  mdm-compliance:
+    executor: dbt-executor
+    steps:
+      - setup-dbt
+      - attach_workspace:
+          at: .
+      - run:
+          name: "Guard: MDM compliance check against compiled manifest"
+          command: |
+            if [ -f target/manifest.json ]; then
+              python scripts/check_mdm_compliance.py
+              echo "MDM compliance check PASSED."
+            else
+              echo "WARNING: No manifest found — skipping MDM compliance check"
+            fi
+      - run:
+          name: "Guard: consolidation ledger covers all enabled models (DEV-4539)"
+          command: |
+            if [ -f target/manifest.json ]; then
+              python3 scripts/check_consolidation_ledger.py \
+                --manifest target/manifest.json \
+                --ledger seeds/audit/ref_dbt_consolidation_ledger.csv
+              echo "Consolidation ledger check PASSED."
+            else
+              echo "WARNING: No manifest found — skipping consolidation ledger check"
+            fi
+
+  # ── PR: Slim CI — dbt Cloud "CI: PR Validation" job (Fusion runner) ──
+  # CircleCI is now a thin orchestrator: trigger the dbt Cloud CI job
+  # (state:modified+ --defer to Production env), poll until done, download
+  # manifest.json + run_results.json so downstream jobs (mdm-compliance,
+  # etc.) can consume them.
+  #
+  # PR feedback strengthens vs. the old in-CircleCI compile: dbt Cloud's CI
+  # job runs `dbt build` (compile + tests) against deferred prod state.
+  #
+  # No more Fusion install, no manifest fetch dance — dbt Cloud handles
+  # state defer natively.
+  slim-ci:
+    executor: dbt-executor
+    # small (1 vCPU / 2GB): job mostly polls dbt Cloud (median CPU ~2%).
+    # large was burning ~$59/mo with almost no local compute.
+    resource_class: small
+    steps:
+      - checkout
+      - trigger-dbt-cloud-job:
+          job-id: "70403104395786" # CI: PR Validation (env Production, deferred)
+          cause: "CircleCI slim-ci PR ${CIRCLE_PULL_REQUEST:-na} ${CIRCLE_BRANCH}@${CIRCLE_SHA1:0:8}"
+          # 130m (was 75m, was 45m, was 30m): a state:modified+ change to a
+          # high-fan-out model (e.g. vw_hcc_assessment, or mart_medical_spending's
+          # metric-view / cube / ServingDB downstream) rebuilds a large graph.
+          # DEV-4537's PR validation run finished green in ~87m wall, but the 75m
+          # poll budget timed out first and marked CircleCI failed while dbt Cloud
+          # was still succeeding. Match deploy-dbt's 130m window; fits under the
+          # command's 135m no_output_timeout ceiling.
+          timeout-minutes: 130
+          ci-isolation-arg: "--ci-isolation" # build into dbt_cloud_pr_* schema, never prod
+      # ProductAnalytics PR build summary (pass/fail + node counts + duration). Runs
+      # after the dbt Cloud poll completes; when: always so a failed build
+      # still emits a status=fail event. No-op without YOUR_ANALYTICS_KEY.
+      - report-productanalytics-pipeline-event:
+          event: dbt_pr_build_complete
+          job-context: slim-ci
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/manifest.json
+            - target/run_results.json
+            - target/sources.json
+            - logs/dbt.log
+      - store_artifacts:
+          path: target/run_results.json
+          destination: dbt_run_results
+      - store_artifacts:
+          path: logs/dbt.log
+          destination: dbt_logs
+
+  # ── Deploy: dbt Cloud "CD: Merge to main" job (Fusion runner) ─────────
+  # CircleCI triggers the dbt Cloud production deploy job and downloads its
+  # artifacts. dbt Cloud's job is configured with `--defer --state` against
+  # the Production environment, so state-modified+ semantics are preserved
+  # without CircleCI fetching a manifest from Azure Blob first.
+  #
+  # steps-override prepends `dbt seed --select state:modified+` before the
+  # historical `dbt run` step so new/changed seeds land in prod (TIC-7908).
+  #
+  # The post-build steps (workspace persist, store_artifacts, errortracking SDK,
+  # report-dbt-to-errortracking) are unchanged — they consume target/manifest.json
+  # + target/run_results.json which the trigger script downloads from dbt Cloud.
+  deploy-dbt:
+    executor: dbt-executor
+    # small (1 vCPU / 2GB): CircleCI only triggers/polls dbt Cloud + light
+    # post-steps. Usage showed ~2% CPU on large (~$36/mo wasted headroom).
+    resource_class: small
+    steps:
+      - checkout
+      - trigger-dbt-cloud-job:
+          job-id: "70403104395787" # CD: Merge to main (env Production, deferred)
+          cause: "CircleCI deploy-dbt main@${CIRCLE_SHA1:0:8}"
+          # 130m (was 90m): after several failed deploys the deferral baseline
+          # goes stale, so a catch-up `state:modified+` rebuilds a large
+          # table-heavy graph that ran past the old 90m poll ceiling (deploy
+          # #1689 timed out with the build still running). Headroom lets the
+          # first green deploy land; once it does, the baseline resets and
+          # subsequent modified+ builds are small again. dbt Cloud runs the job
+          # to completion regardless — this only widens CircleCI's poll window.
+          timeout-minutes: 130
+          # TIC-7908: CD job historically used `dbt run` only, so new seeds
+          # were never materialized and models that `ref()` them failed with
+          # TABLE_OR_VIEW_NOT_FOUND. Prepend seed for state:modified+ seeds.
+          steps-override-args: >-
+            --steps-override "dbt seed --select state:modified+"
+            --steps-override "dbt run --select state:modified+ --exclude tag:raf_heavy"
+      - run:
+          name: Summarize build results
+          when: always
+          command: |
+            if [ -f target/run_results.json ]; then
+              python3 scripts/summarize_build.py target/run_results.json
+            fi
+      - install-errortracking-sdk
+      - report-dbt-to-errortracking:
+          job-context: deploy-dbt
+      # ProductAnalytics deploy summary (pass/fail + node counts + duration + git sha).
+      # when: always so a failed deploy still emits status=fail. No-op without
+      # YOUR_ANALYTICS_KEY.
+      - report-productanalytics-pipeline-event:
+          event: dbt_deploy_complete
+          job-context: deploy-dbt
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/manifest.json
+            - target/run_results.json
+            - target/sources.json
+            - logs/dbt.log
+      - store_artifacts:
+          path: target/run_results.json
+          destination: dbt_run_results
+      - store_artifacts:
+          path: logs/dbt.log
+          destination: dbt_logs
+      # ── Post-deploy: keep ServingDB in sync with the just-deployed dbt model graph ──
+      # 1) Push the fresh manifest to Azure Blob so servingdb_sync.py reads the latest
+      #    meta.servingdb_sync opt-ins, schema names, and PKs.
+      # 2) Trigger the servingdb-sync Prefect deployment so 11-table servingdb-dab-sync reconcile immediately (without this, the next reconcile
+      #    is the 10:00 UTC cron — up to ~24h of staleness after a deploy).
+      # Blob upload uses account-key auth (see upload-manifest-to-blob), so no
+      # `az login` is needed — the previous service-principal login step was
+      # dead weight and broke the deploy when the azure-aks SP went stale
+      # (deploy-production #1209 failed here even though the prod build + the
+      # account-key blob upload were both fine).
+      - run:
+          name: Install Azure CLI (manifest upload)
+          command: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - upload-manifest-to-blob:
+          version-tag: "${CIRCLE_SHA1:0:8}"
+      - trigger-servingdb-sync
+      # Post-ServingDB: dispatch the BIPlatform V3 contract gate (waits for the
+      # Prefect servingdb-sync flow to finish first). Catches the class of
+      # drift dbt cannot — e.g. a removed seed row leaving a ChartSpec
+      # orphaned in the registry. See `trigger-BIPlatform-diagnostics` command
+      # for the polling + dispatch logic.
+      # trigger-BIPlatform-diagnostics removed (DEV-4569 native V3 GraphQL retired)
+
+  # ── Deploy: (re)apply Unity Catalog Metric Views from the registry ───
+  # Metric views read the live marts_bi_v3 marts, so there is no data sync —
+  # they only need their DDL reapplied when the registry seeds change. Runs
+  # against the prod target the same way quality-gate runs dbtf --target prod.
+  # The drift guard first asserts the committed artifacts match the seeds, so a
+  # deploy can never apply a metric view that diverged from metric_views.sql /
+  # metrics_bi_v3_catalog.json. See docs/METRIC_VIEWS.md.
+  deploy-metric-views:
+    executor: dbt-executor
+    steps:
+      - setup-dbt
+      - run:
+          name: "Drift guard: committed metric-view artifacts match the seeds"
+          command: python3 scripts/metric_views/generate_metric_views.py --check
+      - run:
+          # Warehouse-aware contract: every registry column must physically
+          # exist on its source mart, else the WITH METRICS DDL fails at apply
+          # time (UNRESOLVED_COLUMN) and aborts the deploy half-applied. Fail
+          # fast here with the offending rows instead. Implemented as a
+          # run-operation (not a singular test) so PR slim-ci's
+          # `state:modified+` never evaluates it against the not-yet-reseeded
+          # prod registry. See macros/v3_assert_metric_view_columns.sql.
+          name: "Column guard: registry columns exist on their marts (prod)"
+          command: dbtf run-operation v3_assert_metric_view_columns --target prod
+      - run:
+          name: "Apply Unity Catalog metric views (metrics_bi_v3)"
+          command: dbtf run-operation v3_deploy_metric_views --target prod
+          no_output_timeout: 20m
+
+  # ── Nightly: Full Elementary + dbt data quality checks ───────────────
+  quality-gate:
+    executor: dbt-executor
+    circleci_ip_ranges: true
+    steps:
+      - setup-dbt
+      - install-errortracking-sdk
+      - errortracking-cron-start:
+          slug: dbt-nightly-data-quality
+          schedule: "0 23 * * *"
+          max-runtime-min: 120
+          checkin-margin-min: 15
+          productanalytics-event: dbt_nightly_quality_gate
+      - run:
+          name: Install Elementary CLI
+          command: pip install elementary-data[databricks] --quiet
+      - run:
+          name: Run source freshness checks (monitoring only)
+          command: |
+            set +e
+            dbtf source freshness --target prod 2>&1 | tee /tmp/source-freshness-results.txt
+            set -e
+      - run:
+          name: "Schema drift: run schema_drift tests (before baseline refresh)"
+          command: |
+            set +e
+            SCHEMA_TESTS=$(dbtf ls --select tag:schema_drift --resource-types test --target prod --output name --quiet 2>/dev/null | wc -l || echo "0")
+            if [ "$SCHEMA_TESTS" -eq 0 ]; then
+              echo "No schema_drift tests — skipping drift check"
+              exit 0
+            fi
+            echo "Running ${SCHEMA_TESTS} schema_drift tests against stored baseline..."
+            dbtf test --select tag:schema_drift --target prod 2>&1 | tee /tmp/schema-drift-results.txt
+            SCHEMA_EXIT=${PIPESTATUS[0]}  # dbtf exit, not tee's
+            set -e
+            # Exit 0 = all schema_drift tests ran and passed; nothing to assess.
+            if [ "$SCHEMA_EXIT" -eq 0 ]; then
+              echo "Schema drift tests passed"
+              exit 0
+            fi
+            # Non-zero exit: classify before deciding to block. dbt Fusion prints
+            # per-test "Failed [..] test <name>" lines and an Execution Summary
+            # ("Summary: N total | M success"). A genuine schema drift always
+            # produces a Failed test; we block on that unconditionally.
+            # count_matches PATTERN [grep-opts...] → always echoes a clean integer
+            # (0 on no-match/error), so downstream numeric tests can't break on
+            # empty or multi-token output.
+            count_matches() {
+              local n
+              n=$(grep -cE "$@" /tmp/schema-drift-results.txt 2>/dev/null) || n=0
+              n=$(printf '%s' "$n" | tr -cd '0-9')
+              printf '%s' "${n:-0}"
+            }
+            # Detect failures two independent ways so a format change in one
+            # can't silence the gate. Patterns use only plain literals + POSIX
+            # classes (no \s / \d GNU escapes) for portable grep -E behavior:
+            #   (1) a per-test failure line: "Failed" followed by the bracketed
+            #       timing dbt Fusion prints, e.g. "Failed [ 0.1s] test <name>";
+            #   (2) the run summary tally: "Failed: N" or "... | N failed".
+            FAILS_PERTEST=$(count_matches 'Failed[ ]+[[]')
+            FAILS_SUMMARY=$(count_matches 'Failed:[ ]+[1-9]|[1-9][0-9]* failed')
+            SCHEMA_FAILS=$((FAILS_PERTEST + FAILS_SUMMARY))
+            if [ "$SCHEMA_FAILS" -gt 0 ]; then
+              echo "QUALITY GATE FAILED: ${SCHEMA_FAILS} schema drift test failure(s)"
+              exit 1
+            fi
+            # No Failed test, but the run still errored. The only error we treat
+            # as advisory is the elementary schema_changes baseline gap: on the
+            # first run after a new schema_changes test (or a baseline reset) the
+            # test compiles against a not-yet-written column baseline and raises a
+            # Compilation Error. The on-run-end hook writes the baseline that same
+            # run, so it self-heals next nightly. To downgrade safely we require:
+            #   (a) at least one elementary-baseline signature, AND
+            #   (b) EVERY Compilation Error in the output be a baseline one
+            #       (i.e. zero compile errors that don't mention the baseline).
+            # Any non-baseline Compilation Error (a real model/SQL error) — even
+            # alongside a baseline gap — still blocks.
+            # Single source of truth for the baseline signature, reused by the
+            # detection and the non-baseline exclusion so the two can't drift.
+            BASELINE_RE='schema_changes|baseline'
+            BASELINE_SIG=$(count_matches 'no stored baseline|baseline .* not found|missing .*baseline|schema_changes.*baseline|baseline.*schema_changes')
+            # Non-baseline compile errors = Compilation Error lines that mention
+            # neither schema_changes nor baseline (real model/SQL errors).
+            NONBASELINE_COMPILE_ERRS=$(grep -E 'Compilation Error' /tmp/schema-drift-results.txt 2>/dev/null \
+              | grep -cvE "$BASELINE_RE" 2>/dev/null) || NONBASELINE_COMPILE_ERRS=0
+            NONBASELINE_COMPILE_ERRS=$(printf '%s' "$NONBASELINE_COMPILE_ERRS" | tr -cd '0-9')
+            NONBASELINE_COMPILE_ERRS=${NONBASELINE_COMPILE_ERRS:-0}
+            if [ "$BASELINE_SIG" -gt 0 ] && [ "$NONBASELINE_COMPILE_ERRS" -eq 0 ]; then
+              echo "ADVISORY: schema_drift hit an elementary baseline gap (${BASELINE_SIG} signal(s)) with 0 Failed tests and 0 non-baseline compile errors."
+              echo "The on-run-end hook writes the baseline this run; the test self-heals next nightly. Not blocking."
+              exit 0
+            fi
+            # Anything else (non-baseline compile error, or an opaque error with no
+            # baseline signature) is a real failure and hard-fails the gate.
+            if [ "$NONBASELINE_COMPILE_ERRS" -gt 0 ]; then
+              echo "QUALITY GATE FAILED: schema_drift hit ${NONBASELINE_COMPILE_ERRS} non-baseline compilation error(s)"
+            else
+              echo "QUALITY GATE FAILED: schema_drift test run errored (exit ${SCHEMA_EXIT}, no baseline signature)"
+            fi
+            exit 1
+      - run:
+          name: Run Elementary tests (full, excludes schema_drift)
+          command: |
+            set +e
+            dbtf test --select tag:elementary --exclude tag:schema_drift --target prod 2>&1 | tee /tmp/elementary-results.txt
+            DBT_EXIT=${PIPESTATUS[0]}  # dbtf exit, not tee's
+            set -e
+
+            # dbt Fusion logs Failed/Passed/Warned (not FAIL/PASS/WARN)
+            FAIL_COUNT=$(grep -cE '^\s+Failed ' /tmp/elementary-results.txt 2>/dev/null || true)
+            WARN_COUNT=$(grep -cE '^\s+Warned ' /tmp/elementary-results.txt 2>/dev/null || true)
+            PASS_COUNT=$(grep -cE '^\s+Passed ' /tmp/elementary-results.txt 2>/dev/null || true)
+            FAIL_COUNT=${FAIL_COUNT:-0}
+            WARN_COUNT=${WARN_COUNT:-0}
+            PASS_COUNT=${PASS_COUNT:-0}
+
+            echo ""
+            echo "Elementary results: ${PASS_COUNT} passed, ${WARN_COUNT} warned, ${FAIL_COUNT} failed"
+
+            # Quality gate: schema_drift errors are blocking, volume warnings are advisory
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              echo "WARNING: ${FAIL_COUNT} Elementary tests failed — review required"
+              echo "Checking if failures are critical (schema drift) or advisory (volume)..."
+
+              SCHEMA_FAILS=$(grep -cE 'Failed.*elementary_schema_changes' /tmp/elementary-results.txt 2>/dev/null || echo "0")
+              if [ "$SCHEMA_FAILS" -gt 0 ]; then
+                echo "QUALITY GATE FAILED: ${SCHEMA_FAILS} schema drift errors detected"
+                echo "Upstream schema changes may break downstream marts or BI metrics"
+                exit 1
+              fi
+
+              echo "No schema drift failures — volume anomalies are advisory only"
+            fi
+
+            # Compilation / runtime error guard: dbt exits non-zero on a
+            # Compilation Error or runner crash even when no test prints a
+            # "Failed" line. Without this guard such failures escape the gate
+            # (FAIL_COUNT stays 0). Any unexplained non-zero dbt exit is a real
+            # failure — block rather than silently pass.
+            if [ "$DBT_EXIT" -ne 0 ] && [ "$FAIL_COUNT" -eq 0 ]; then
+              echo "QUALITY GATE FAILED: dbt exited ${DBT_EXIT} with 0 parsed Failed lines (compilation or runtime error)"
+              exit 1
+            fi
+      # DEV-4546: the generic non-Elementary dbt DQ tests previously ran here
+      # (`dbtf test --exclude tag:elementary tag:manual_only tag:raf_heavy
+      # --target prod`). That exact set (and more) is now executed once per
+      # day by the Prefect `databricks-adf-mv-refresh` flow's deferred
+      # `run_dbtf_tests` task (`dbtf test --target prod`, no excludes), which
+      # alerts on failures via ErrorTracking (`report_error` fingerprint
+      # `dbtf-deferred-tests-failed` + `_emit_dbtf_node_failures_to_errortracking`)
+      # to #devalerts. Running it here too burned a second full nightly
+      # `dbtf test` pass against the same prod tables for no incremental
+      # signal. This gate keeps the specialized steps the ADF task does NOT
+      # replicate: schema_drift baseline self-heal, Elementary
+      # `edr monitor`/`report`/cloud-sync + Slack #bi-alerts, source
+      # freshness, and the `dbt-nightly-data-quality` ErrorTracking cron heartbeat.
+      - run:
+          name: Send Elementary alerts to Slack (#bi-alerts)
+          when: always
+          command: |
+            # All Elementary anomalies + dbt test failures/warnings from the
+            # latest invocation are pushed to Slack #bi-alerts. Errors-only go
+            # to ErrorTracking separately (report-dbt-to-errortracking below); this is the
+            # "all warnings/anomalies -> Slack" half of the routing split.
+            # Guarded + non-blocking: never mask or alter the gate's pass/fail.
+            if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+              echo "SLACK_BOT_TOKEN not set — skipping Slack alerting."
+              echo "Add SLACK_BOT_TOKEN (and optional BI_ALERTS_SLACK_CHANNEL) to the dbt-databricks CircleCI context; the token already lives in the BIPlatform your-secret-manager project."
+              exit 0
+            fi
+            edr monitor \
+              --profile-target prod \
+              --slack-token "$SLACK_BOT_TOKEN" \
+              --slack-channel-name "${BI_ALERTS_SLACK_CHANNEL:-bi-alerts}" 2>/dev/null || true
+      - run:
+          name: Generate Elementary report
+          when: always
+          command: |
+            edr report --profile-target prod --target-path target/elementary/ 2>/dev/null || true
+      - run:
+          name: Sync Elementary metadata to cloud
+          when: always
+          command: |
+            edr monitor --profile-target prod --sync-to-cloud 2>/dev/null || true
+      - store_artifacts:
+          path: target/elementary/
+          destination: elementary_report
+      - store_artifacts:
+          path: /tmp/elementary-results.txt
+          destination: elementary_test_output
+      - store_artifacts:
+          path: /tmp/source-freshness-results.txt
+          destination: source_freshness_output
+      - report-dbt-to-errortracking:
+          job-context: quality-gate
+      - errortracking-cron-finish:
+          slug: dbt-nightly-data-quality
+          productanalytics-event: dbt_nightly_quality_gate
+
+  # ── Utility: Full refresh (manual trigger) ───────────────────────────
+  full-refresh:
+    executor: dbt-executor
+    steps:
+      - setup-dbt
+      - run:
+          name: "dbtf build --full-refresh (production)"
+          # tag:no_full_refresh excludes append-only models (e.g. CDIA provider audit,
+          # MDM reference_data) whose rows are owned downstream and must never be
+          # CREATE-OR-REPLACE'd. Jira: DEV-4018.
+          command: dbtf build --full-refresh --target prod --exclude tag:schema_drift tag:no_full_refresh
+          no_output_timeout: 90m
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/manifest.json
+
+# ---------------------------------------------------------------------------
+# Workflows
+# ---------------------------------------------------------------------------
+workflows:
+  version: 2
+
+  # ── Pull Request validation (fast feedback) ──────────────────────────
+  pr-validation:
+    jobs:
+      - validate:
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              ignore: main
+
+      # Lint runs in parallel with validate (no dependency)
+      - lint:
+          filters:
+            branches:
+              ignore: main
+
+      # CodeAnt secrets gate (blocking on any detected secret) — parallel, PR branches only
+      - codeant-gate:
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              ignore: main
+
+      # Guards run in parallel (no dependency, fast checks)
+      - full-refresh-guard:
+          filters:
+            branches:
+              ignore: main
+
+      - seed-integrity-guard:
+          filters:
+            branches:
+              ignore: main
+
+      - ci-isolation-guard:
+          filters:
+            branches:
+              ignore: main
+
+      - test-lint-guard:
+          filters:
+            branches:
+              ignore: main
+
+      - metric-views-guard:
+          filters:
+            branches:
+              ignore: main
+
+      # MDM compliance needs the compiled manifest from validate
+      - mdm-compliance:
+          requires:
+            - validate
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              ignore: main
+
+      # Cube validation removed — Cube infrastructure deprecated. K8s
+      # workloads scaled to 0; cube/ directory deleted from this PR.
+
+      # Slim CI: compile + test modified models (read-only, NO database writes)
+      - slim-ci:
+          requires:
+            - validate
+            - full-refresh-guard
+            - seed-integrity-guard
+            - ci-isolation-guard
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              ignore: main
+
+  # ── Production deploy (main branch) ──────────────────────────────────
+  deploy-production:
+    jobs:
+      - validate:
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              only: main
+
+      # Cube workflow jobs (validate-cube, schema-gate, deploy-cube)
+      # removed — Cube infrastructure deprecated. K8s workloads scaled
+      # to 0 on 2026-05-16; cube/ directory deleted from this PR.
+
+      - deploy-dbt:
+          requires:
+            - validate
+          context:
+            - dbt-databricks
+            - azure-aks
+            - errortracking-datamodel
+            - orchestration-context # PREFECT_API_URL + PREFECT_API_KEY for post-deploy servingdb-sync trigger
+          filters:
+            branches:
+              only: main
+
+      # After the marts are deployed, (re)apply the Unity Catalog metric views
+      # so AI/BI dashboards + Genie resolve the registry's measure math.
+      - deploy-metric-views:
+          requires:
+            - deploy-dbt
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              only: main
+
+  # ── Daily data quality checks (3 PM PST / 23:00 UTC) ─────────────────
+  # Runs mid-afternoon Pacific so the serverless SQL warehouse is already warm
+  # and failures land during business hours. CircleCI cron is fixed UTC:
+  # "0 23 * * *" = 3 PM PST (UTC-8) and 4 PM PDT (UTC-7, summer).
+  nightly-data-quality:
+    triggers:
+      - schedule:
+          cron: "0 23 * * *"
+          filters:
+            branches:
+              only: main
+    jobs:
+      - quality-gate:
+          context:
+            - dbt-databricks
+            - errortracking-datamodel
+
+  # ── Manual full refresh (trigger with force-full-build=true) ─────────
+  manual-full-refresh:
+    when: << pipeline.parameters.force-full-build >>
+    jobs:
+      - full-refresh:
+          context:
+            - dbt-databricks
+          filters:
+            branches:
+              only: main

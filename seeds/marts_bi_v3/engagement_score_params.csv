@@ -1,0 +1,7 @@
+param_key,param_value,notes
+score_version,1.2.0,Bump when event weights or k change
+k_engagement,70,tanh sensitivity for Engagement Score
+k_load,6,tanh sensitivity for Outreach Load
+lookback_days,all,Full history; decay only
+lapse_days_threshold,180,OR silent-leakage / return-curve Unengaged floor
+lapse_raw_at_180,40,Visit-lapse raw penalty at 180d for Active

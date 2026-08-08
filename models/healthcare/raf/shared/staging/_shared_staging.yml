@@ -1,0 +1,423 @@
+version: 2
+
+models:
+  - name: stg_raf__patient_enrollment
+    description: >
+      Patient-level CMS enrollment segment mapping. Each patient is assigned
+      a segment (CNA, NE, CND, etc.) that determines the coefficient set used
+      for their RAF score calculation.
+    columns:
+      - name: patient_id
+        description: "Athena patient ID"
+        tests:
+          - not_null
+      - name: enrollment_code
+        description: "CMS enrollment segment code (CNA, NE, CND, CFA, etc.)"
+        tests:
+          - not_null
+      - name: enrollment_name
+        description: "Human-readable enrollment segment name"
+      - name: is_community
+        description: "True if community-based enrollment"
+      - name: is_dual_eligible
+        description: "True if dual-eligible (Medicare + Medicaid)"
+      - name: hccpy_elig_code
+        description: "Eligibility code used by hccpy library"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - enrollment_code
+              - coded_year
+
+  - name: stg_raf__patient_status_monthly
+    description: >
+      Monthly patient attribution status. Determines which patients
+      are actively attributed for RAF scoring in each month.
+    columns:
+      - name: patient_id
+        description: "Athena patient ID"
+        tests:
+          - not_null
+      - name: status_month
+        description: "Attribution period as date"
+        tests:
+          - not_null
+      - name: payment_year
+        description: "Derived payment year"
+      - name: is_active
+        description: "True if patient is actively attributed"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - status_month
+
+  - name: stg_raf__ghost_status_monthly
+    description: >
+      Roster-only (ghost) monthly status, keyed on identity_id. Ghosts have no
+      Athena record so their monthly "active" status is derived purely from payor
+      roster presence (carry-forward attribution spans). Mirrors
+      stg_raf__patient_status_monthly for the demographic-only RAF chain.
+    columns:
+      - name: entity_id
+        description: EMPI member key (= identity_id for ghosts).
+        tests: [not_null]
+      - name: identity_id
+        description: Immutable EMPI identity (H-number) for the member.
+        tests: [not_null]
+      - name: status_month
+        description: Attribution / status period as a date.
+        tests: [not_null]
+      - name: is_active
+        description: Always true (a ghost row exists only for months it is on roster).
+        tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - identity_id
+              - status_month
+
+  - name: stg_raf__year_processing_config
+    description: >
+      Year-level processing configuration controlling which payment years
+      are open, locked, or transitioning for RAF scoring.
+    columns:
+      - name: payment_year
+        description: "Payment year (e.g., 2024, 2025)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: is_active
+        description: "Whether the payment year is actively processing"
+        tests:
+          - not_null
+      - name: is_permanent
+        description: "Whether the payment year is permanently locked"
+        tests:
+          - not_null
+
+  - name: stg_raf__test_exclusions
+    description: >
+      Test/demo patient IDs to exclude from RAF scoring.
+    columns:
+      - name: patient_id
+        description: "Patient ID to exclude"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: is_excluded
+        description: "Always true for records in this table"
+
+  - name: stg_athena__patient
+    description: >
+      Patient demographics from Athena EHR. Provides age, sex, and
+      identity fields needed for CMS demographic coefficient selection.
+    columns:
+      - name: patient_id
+        description: "Athena patient ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: date_of_birth
+        description: "Patient date of birth for age calculation"
+        tests:
+          - not_null
+      - name: sex_code
+        description: "M, F, or U for unknown"
+
+  - name: stg_athena__claim
+    description: >
+      Claims from Athena EHR. Each claim links to diagnosis codes
+      that feed into HCC mapping.
+    columns:
+      - name: claim_id
+        description: "Unique claim identifier"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: "Athena patient ID"
+        tests:
+          - not_null
+      - name: service_date
+        description: "Date of service for the claim"
+
+  - name: stg_athena__claim_diagnosis
+    description: >
+      ICD-10-CM diagnosis codes attached to claims. Primary input for
+      HCC mapping. Fixes B3 (strict ICD-10 code set matching).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - claim_id
+              - diagnosis_code
+    columns:
+      - name: claim_diagnosis_id
+        description: "Unique claim diagnosis identifier"
+      - name: claim_id
+        description: "Parent claim ID"
+        tests:
+          - not_null
+      - name: diagnosis_code
+        description: "ICD-10-CM diagnosis code"
+        tests:
+          - not_null
+      - name: is_icd10
+        description: "True if code is ICD-10 (required for CMS HCC v28)"
+
+  - name: stg_athena__appointment
+    description: >
+      Appointment records from Athena EHR. Provides encounter-level
+      context including dates and completion status.
+    columns:
+      - name: appointment_id
+        description: "Unique appointment identifier"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: "Athena patient ID"
+        tests:
+          - not_null
+      - name: appointment_date
+        description: "Date of the appointment"
+
+  - name: stg_athena__provider
+    description: >
+      Provider demographics from Athena EHR for provider-level reporting.
+    columns:
+      - name: provider_id
+        description: "Athena provider ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: npi
+        description: "National Provider Identifier"
+
+  - name: stg_athena__appointmenttype
+    description: >
+      DEPRECATED (hold until 2026-08-18): orphan RAF staging; downstream reads
+      source('athena_raf','appointmenttype') directly. Soft-disabled via model config.
+    columns:
+      - name: appointment_type_id
+        description: Athena appointment type identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+  - name: stg_athena__department
+    description: "Athena department reference data for care site context."
+    columns:
+      - name: department_id
+        description: Athena department identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+  - name: stg_athena__customdemographics
+    description: >
+      DEPRECATED (hold until 2026-08-18): orphan RAF staging; downstream reads
+      source('athena_raf','customdemographics') directly. Soft-disabled via model config.
+      Grain: one row per patient + custom_field_id.
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        constraints:
+          - type: not_null
+      - name: custom_field_id
+        description: Athena custom demographics field identifier.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - custom_field_id
+          config:
+            where: "custom_field_id IS NOT NULL"
+
+  - name: stg_athena__clinicalencounter
+    description: "Clinical encounters linking appointments to clinical documentation."
+    columns:
+      - name: clinical_encounter_id
+        description: Athena clinical encounter identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+
+  - name: stg_athena__clinicalencounterdxicd10
+    description: "ICD-10 diagnosis codes at the clinical encounter level. PK: clinical_encounter_dx_icd10_id."
+    columns:
+      - name: clinical_encounter_dx_icd10_id
+        description: Athena clinical encounter ICD-10 diagnosis row identifier.
+        tests:
+          - unique
+          - not_null
+      - name: clinical_encounter_dx_id
+        description: Athena clinical encounter diagnosis identifier.
+        tests: [not_null]
+      - name: icd_code_id
+        description: Athena ICD code identifier.
+        tests: [not_null]
+
+  - name: stg_athena__clinicalencounterdiagnosis
+    description: "Broader clinical encounter diagnosis records."
+    columns:
+      - name: clinical_encounter_dx_id
+        description: Athena clinical encounter diagnosis identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+
+  - name: stg_athena__icdcodeall
+    description: "All ICD code definitions from Athena for code validation."
+    columns:
+      - name: icd_code_id
+        description: Athena ICD code identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: icd_code
+        description: ICD-10 diagnosis code.
+        tests: [not_null]
+
+  - name: stg_athena__claimnote
+    description: >
+      DEPRECATED (hold until 2026-08-18): orphan RAF staging; downstream reads
+      source('athena_raf','claimnote') directly. Soft-disabled via model config.
+    columns:
+      - name: claim_note_id
+        description: Athena claim note identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: claim_id
+        description: Unique claim identifier.
+        tests: [not_null]
+
+  - name: stg_athena__claimaudit
+    description: >
+      DEPRECATED (hold until 2026-08-18): orphan RAF staging; downstream reads
+      source('athena_raf','claimaudit') directly. Soft-disabled via model config.
+      Source has exact duplicate rows from CDC replication.
+    columns:
+      - name: entity_id
+        description: Stable EMPI member key (Athena patient_id or identity_id for ghosts).
+        tests: [not_null]
+      - name: source_id
+        description: Upstream source-system row identifier for this audit event.
+        tests: [not_null]
+
+  - name: stg_athena__chart
+    description: "Patient chart records for chart-to-patient ID resolution."
+    columns:
+      - name: chart_id
+        description: Clinical chart identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: enterprise_id
+        description: Athena enterprise/chart enterprise identifier.
+        tests: [not_null]
+
+  - name: stg_athena__patientinsurance
+    description: "Patient insurance/payer data for eligibility segment determination."
+    columns:
+      - name: patient_insurance_id
+        description: Athena patient insurance row identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+
+  - name: stg_athena__visit
+    description: >
+      Athena visit billing header for RAF risk-adjustable encounter gating.
+      Links visit charges to patient and service date.
+      Grain: one row per visit_id.
+    columns:
+      - name: visit_id
+        description: "Athena visit ID"
+      - name: patient_id
+        description: "Athena patient ID"
+      - name: visit_date
+        description: "Visit / check-in date of service"
+
+  - name: stg_athena__visitcharge
+    description: >
+      Athena visit charges (CPT/HCPCS) used to gate RAF-eligible diagnoses
+      to reference risk-adjustable encounters.
+      Grain: one row per visit_id x procedure_code (non-deleted charges).
+    columns:
+      - name: visit_id
+        description: "Athena visit ID (join to stg_athena__visit)"
+      - name: procedure_code
+        description: "Billed CPT/HCPCS procedure code"
+
+  # ============================================
+  # Athena patient problem-list staging
+  # ============================================
+  - name: stg_athena__patientproblem
+    description: >
+      Patient problem list from Athena EHR. Active chronic conditions with
+      SNOMED codes. Used as MEAT compliance proxy when bridged to ICD-10
+      via encounter diagnoses. Excludes deleted problems.
+    columns:
+      - name: patient_problem_id
+        description: "Unique problem list entry ID"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: "Athena patient ID"
+      - name: snomed_code
+        description: "SNOMED-CT code for the condition"
+      - name: problem_status
+        description: "Problem status (chronic, acute, etc.)"
+      - name: onset_date
+        description: "Date of condition onset"
+      - name: is_active
+        description: "True if condition is currently active (not deactivated or reactivated after deactivation)"
+
+  # ============================================
+  # CMS Roster staging model
+  # ============================================
+  - name: stg_cms_roster__membership
+    description: "CMS Roster membership/attribution data (fallback eligibility source)."
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: enrollment_type
+        description: Membership enrollment type from the CMS Roster roster.
+        tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - enrollment_type

@@ -1,0 +1,58 @@
+version: 2
+
+seeds:
+  - name: ref_dbt_consolidation_ledger
+    description: >
+      Consolidation and migration ledger for all healthcare_analytics dbt models.
+      Tracks model metadata, materialization, contract enforcement, and lifecycle
+      migration status (active, candidate_deprecate, candidate_fix, soft_deprecated,
+      candidate_consolidate) across waves of contract consolidation.
+    config:
+      schema: audit
+      tags: ["audit", "consolidation", "meta_guard"]
+    columns:
+      - name: model_name
+        description: "The name of the dbt model"
+        tests:
+          - not_null
+          - unique
+      - name: unique_id
+        description: "The unique ID of the model in the dbt graph"
+        tests:
+          - not_null
+          - unique
+      - name: model_path
+        description: "The relative path to the model SQL file"
+        tests:
+          - not_null
+      - name: schema
+        description: "The target schema for the model"
+        tests:
+          - not_null
+      - name: materialization
+        description: "The configured materialization (table, view, incremental, ephemeral)"
+        tests:
+          - not_null
+      - name: resource_enabled
+        description: "Whether the model is currently enabled in dbt"
+        tests:
+          - not_null
+      - name: contract_enforced
+        description: "Whether dbt model contract enforcement is enabled"
+        tests:
+          - not_null
+      - name: migration_status
+        description: "The migration lifecycle status of the model"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - active
+                  - candidate_deprecate
+                  - candidate_fix
+                  - soft_deprecated
+                  - candidate_consolidate
+                  - keep
+      - name: wave
+        description: "The target migration wave (A, B, etc.) or blank if active"

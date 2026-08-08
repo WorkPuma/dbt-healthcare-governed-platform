@@ -1,0 +1,45 @@
+interaction_key,category_1,category_2,cms_label
+INT200,CAN,IMM,Immune Disorders*Cancer
+INT201,DIA,CHF,Congestive Heart Failure*Diabetes
+INT202,CHF,COPD,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT203,CHF,REN,Congestive Heart Failure*Renal
+INT204,COPD,CRF,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+INT205,CHF,SHA,Congestive Heart Failure*Specified Heart Arrhythmias
+INT206,ABS,PSY,Substance Use Disorder*Psychiatric
+INT207,SEP,ULC,Sepsis*Pressure Ulcer
+INT208,SEP,ULC,Sepsis*Artificial Openings for Feeding or Elimination
+INT209,ART,ULC,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT210,COPD,ASP,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT211,ASP,ULC,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT212,SEP,ASP,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT213,SCH,COPD,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT214,SCH,CHF,Schizophrenia*Congestive Heart Failure
+INT215,SCH,SEI,Schizophrenia*Seizure Disorders and Convulsions
+INT220,DIS,CHF,"Disabled, Congestive Heart Failure"
+INT221,DIS,ULC,"Disabled, Pressure Ulcer"
+INT222,DIS,CUS,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT223,DIS,NEC,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT224,DIS,MSS,"Disabled, Multiple Sclerosis"
+INT225,DIS,OPP,"Disabled, Opportunistic Infections"
+INT200,IMM,CAN,Immune Disorders*Cancer
+INT201,CHF,DIA,Congestive Heart Failure*Diabetes
+INT202,COPD,CHF,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT203,REN,CHF,Congestive Heart Failure*Renal
+INT204,CRF,COPD,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+INT205,SHA,CHF,Congestive Heart Failure*Specified Heart Arrhythmias
+INT206,PSY,ABS,Substance Use Disorder*Psychiatric
+INT207,ULC,SEP,Sepsis*Pressure Ulcer
+INT208,ULC,SEP,Sepsis*Artificial Openings for Feeding or Elimination
+INT209,ULC,ART,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT210,ASP,COPD,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT211,ULC,ASP,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT212,ASP,SEP,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT213,COPD,SCH,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT214,CHF,SCH,Schizophrenia*Congestive Heart Failure
+INT215,SEI,SCH,Schizophrenia*Seizure Disorders and Convulsions
+INT220,CHF,DIS,"Disabled, Congestive Heart Failure"
+INT221,ULC,DIS,"Disabled, Pressure Ulcer"
+INT222,CUS,DIS,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT223,NEC,DIS,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT224,MSS,DIS,"Disabled, Multiple Sclerosis"
+INT225,OPP,DIS,"Disabled, Opportunistic Infections"

@@ -1,0 +1,5 @@
+payment_year,diagnosis_coded_year,run_type,is_scoreable,source_document,notes
+2024,2024,concurrent,false,Legacy concurrent scoring,PY2024 not scoreable - EMR data inception is Oct 2024 so there is no complete prior-year (CY2023) diagnosis basis under the CMS prospective model
+2025,2025,concurrent,false,Legacy concurrent scoring,PY2025 not scoreable - prospective PY2025 would need a full CY2024 diagnosis year but EMR data starts Oct 2024 (partial); concurrent run also double-uses CY2025 which prospectively belongs to PY2026
+2026,2025,cms_midyear,true,CMS CY2026 Implementation Memo,PY2026 is the first fully-scoreable payment year - uses complete CY2025 diagnoses per CMS prospective midyear/final methodology
+2027,2026,cms_midyear,true,CMS CY2027 Rate Announcement (projected),PY2027 projected using CY2026 diagnoses per CMS prospective methodology

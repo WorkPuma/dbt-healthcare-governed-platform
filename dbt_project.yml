@@ -1,0 +1,690 @@
+# GenericCo Analytics dbt Project
+# Converts Databricks assets to modular, testable dbt models
+
+name: "healthcare_analytics"
+version: "1.0.0"
+config-version: 2
+
+require-dbt-version: [">=1.10.0,<3.0.0"]
+
+profile: "healthcare_databricks"
+
+# =============================================================================
+# BEHAVIOR FLAGS - Opt into new behaviors to eliminate deprecation warnings
+# =============================================================================
+flags:
+  use_managed_iceberg: true # Use managed Iceberg tables instead of UniForm
+  use_materialization_v2: true # Use revamped materializations for better performance
+  # Silence dbt1005 for the semantic-manifest validation: dbt-fusion raises a
+  # spurious "Skipping semantic manifest validation ... dbt_cloud.yml" warning
+  # for Semantic Layer projects not validating through dbt platform. Known
+  # upstream false-positive (dbt-labs/dbt-fusion #14251).
+  warn_error_options:
+    silence:
+      - InvalidConfig
+
+# dbt Cloud configuration
+dbt-cloud:
+  project-id: REDACTED
+
+# Hooks — ensure CDF stays enabled on table-materialized models after every
+# build. The SemanticLayer semantic layer was fully retired 2026-06 (AKS workloads
+# had already been scaled to 0 since ~Feb 2026); the BI path is now
+# marts_bi_v3 → ServingDB → BIPlatform V3 GraphQL.
+on-run-end:
+  - "{{ enable_cdf_after_build() }}"
+
+# Model paths
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+docs-paths: ["docs"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Model configurations
+# All production models default to TABLE for ServingDB Postgres hourly sync.
+# Only sources/ and intermediate/ stay as views (building blocks, not synced).
+models:
+  healthcare_analytics:
+    +materialized: table
+    +tblproperties:
+      delta.enableChangeDataFeed: "true"
+    +target_alias: "t"
+    +source_alias: "s"
+
+    # Project-level safety net: every incremental model in the project is
+    # protected from --full-refresh by default. This is a no-op for view /
+    # table materializations (dbt only consults +full_refresh on incrementals),
+    # so the practical effect is: dbt build --full-refresh will NOT
+    # CREATE OR REPLACE TABLE any incremental mart, fact, dimension, or
+    # _synced source. This protects:
+    #   - ServingDB TRIGGERED sync chains (CREATE OR REPLACE truncates CDF and
+    #     forces a full Postgres reseed; see prefect/sync-chain-troubleshooting
+    #     skill)
+    #   - Hand-curated columns preserved via merge_exclude_columns (CDIA, MDM)
+    #   - Append-only event logs (raf/cdc, audit history)
+    #   - Marts whose unique_key refactors require a manual targeted refresh
+    #     (PR #161 / fct_provider_metric_history pattern — opt in per-model)
+    # To genuinely full-refresh a single incremental model, override at the
+    # model level: `{{ config(full_refresh=true) }}` in the .sql file (deliberate
+    # code change, reviewable in PR), then revert after the targeted run.
+    +full_refresh: false
+
+    # Healthcare schema - clinical analytics tables
+    healthcare:
+      +schema: healthcare
+      awv:
+        +tags: ["awv", "wellness", "superset"]
+      tcm:
+        +tags: ["tcm", "care_management", "superset"]
+      scheduling:
+        +tags: ["scheduling", "capacity", "superset"]
+      wbr:
+        +tags: ["wbr", "weekly_business_review"]
+      cbp:
+        +tags: ["cbp", "quality"]
+      quality:
+        +tags: ["quality", "dev-4296"]
+        staging:
+          +materialized: view
+          +schema: healthcare
+          +tags: ["quality", "staging"]
+        intermediate:
+          +materialized: view
+          +schema: healthcare
+          +tags: ["quality", "intermediate"]
+        marts:
+          +materialized: table
+          +schema: healthcare
+          +tags: ["quality", "marts"]
+      athena:
+        +tags: ["athena", "ehr"]
+      # RN / nursing inbox productivity (DEV-3849). Promoted from the ad-hoc
+      # dev_chris.rn_inbox.* view graph. All models are views (live over Athena
+      # + NICE replicas, matching the pre-promotion behaviour); the report feeds
+      # the SharePoint RN Inbox Tracker publish + the nursing productivity canvas.
+      rn_inbox:
+        +materialized: view
+        +tags: ["rn_inbox", "nursing"]
+      pcp:
+        +tags: ["pcp", "patient_care", "superset"]
+      behavioral_health:
+        +tags: ["behavioral_health", "bh"]
+      membership:
+        +tags: ["membership", "commercial", "cube", "BIPlatform"]
+      empi:
+        +tags: ["empi", "mdm", "matching"]
+      payor:
+        +tags: ["payor", "attribution"]
+        staging:
+          +materialized: view
+          +schema: healthcare
+          +tags: ["payor", "staging"]
+        intermediate:
+          +schema: healthcare
+          +tags: ["payor", "intermediate"]
+        gold:
+          +schema: healthcare
+          +tags: ["payor", "gold"]
+      nps:
+        +tags: ["nps", "survey", "ai"]
+      mddo:
+        +tags: ["mddo", "physician", "cases"]
+      ai_outreach:
+        +tags: ["ai_outreach", "outreach", "awv", "cube", "BIPlatform"]
+      # RAF is organized segment-first (shared / capture / score / revenue), then
+      # by layer. Per-layer +materialized/+schema/+tags are replicated under each
+      # segment so the move is relation-preserving: staging/intermediate stay
+      # views (raf_staging / raf_intermediate), cdc stays incremental (raf_cdc),
+      # gold/facts/reports stay tables in healthcare. (schema= is also set in-file
+      # on every model; these paths are the materialization source of truth and a
+      # safety fallback.) See docs/raf/raf_segment_reorg_plan.md.
+      raf:
+        +tags: ["raf", "risk_adjustment", "cms_hcc"]
+        shared:
+          staging:
+            +materialized: view
+            +schema: raf_staging
+            +tags: ["raf", "staging"]
+          intermediate:
+            +materialized: view
+            +schema: raf_intermediate
+            +tags: ["raf", "intermediate"]
+          facts:
+            +schema: healthcare
+            +tags: ["raf", "fact", "cube", "BIPlatform"]
+        capture:
+          staging:
+            +materialized: view
+            +schema: raf_staging
+            +tags: ["raf", "staging"]
+          intermediate:
+            +materialized: view
+            +schema: raf_intermediate
+            +tags: ["raf", "intermediate"]
+          gold:
+            +schema: healthcare
+            +tags: ["raf", "gold", "cube", "BIPlatform"]
+          reports:
+            +schema: healthcare
+            +tags: ["raf", "reporting"]
+        score:
+          staging:
+            +materialized: view
+            +schema: raf_staging
+            +tags: ["raf", "staging"]
+          intermediate:
+            +materialized: view
+            +schema: raf_intermediate
+            +tags: ["raf", "intermediate"]
+          gold:
+            +schema: healthcare
+            +tags: ["raf", "gold", "cube", "BIPlatform"]
+          facts:
+            +schema: healthcare
+            +tags: ["raf", "fact", "cube", "BIPlatform"]
+          reports:
+            +schema: healthcare
+            +tags: ["raf", "reporting"]
+          cdc:
+            +materialized: incremental
+            +schema: raf_cdc
+            +tags: ["raf", "cdc", "event_log"]
+        revenue:
+          staging:
+            +materialized: view
+            +schema: raf_staging
+            +tags: ["raf", "staging"]
+          intermediate:
+            +materialized: view
+            +schema: raf_intermediate
+            +tags: ["raf", "intermediate"]
+          facts:
+            +schema: healthcare
+            +tags: ["raf", "fact", "cube", "BIPlatform"]
+          reports:
+            +schema: healthcare
+            +tags: ["raf", "reporting"]
+
+      # CDIA — Provider audit worklist + scoring tables.
+      # CRITICAL: +full_refresh: false protects backfilled Q1 2026 data and any
+      # future month's audited rows from accidental wipeout. The CDIA project
+      # treats fct_cdia__provider_audit as append-only — once a month seeds a
+      # row, it is owned by BIPlatform (auditor scoring flow) and must never be
+      # silently regenerated. A --full-refresh would CREATE OR REPLACE TABLE
+      # and destroy all auditor work to date. Jira: DEV-4018.
+      cdia:
+        +full_refresh: false
+        +tags: ["cdia"]
+        gold:
+          +schema: healthcare
+          +tags: ["cdia", "gold", "cube"]
+
+    # Sources - staging views for reusable transformations (NOT synced)
+    sources:
+      +materialized: view
+      +schema: staging
+      mdm:
+        +tags: ["mdm", "reference"]
+      salesforce:
+        +tags: ["salesforce", "crm"]
+      nice:
+        +tags: ["nice", "call_center", "reference"]
+      athenahealth:
+        +tags: ["athenahealth", "ehr", "base"]
+
+    # Intermediate models - cross-schema business logic (NOT synced)
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +tags: ["intermediate"]
+
+    # Behavioral Health schema - BH reporting tables
+    behavioral_health:
+      +schema: materialized_views
+      +tags: ["behavioral_health", "reporting"]
+
+    # Experian schema - eligibility and coverage discovery tables
+    experian:
+      +tags: ["experian", "eligibility", "coverage_discovery"]
+
+    # Provider Bonus - 2026 bonus scorecard pipeline
+    provider_bonus:
+      +tags: ["provider_bonus"]
+      staging:
+        +schema: provider_bonus_staging
+        +tags: ["provider_bonus", "staging"]
+      intermediate:
+        +materialized: view
+        +schema: provider_bonus
+        +tags: ["provider_bonus", "intermediate"]
+      facts:
+        +schema: provider_bonus
+        +tags: ["provider_bonus", "fact", "cube", "BIPlatform"]
+
+    # MDM Sync - incremental merge models that refresh mdm.reference_data tables
+    # These run early in the DAG and keep MDM reference tables current with Athena/Salesforce.
+    # CRITICAL: full_refresh: false protects hand-curated columns (Patient_Visit, Physician,
+    # review_status, etc.) that are set via the BIPlatform UI and preserved via merge_exclude_columns.
+    # A --full-refresh drops and recreates the table, wiping all curated values.
+    mdm:
+      +materialized: incremental
+      +full_refresh: false
+      # Prod catalog for these reference tables is `mdm`. Catalog routing:
+      #   * dbt Cloud CI (slim-ci PR isolation, target.schema = dbt_cloud_pr_*)
+      #     -> the dbt_cloud_pr-aware ternary below pins the connection default
+      #     catalog (databricks_prod) where the per-PR schema lives. The mdm
+      #     catalog cannot host a dbt_cloud_pr_* schema, so a hard `+database:
+      #     mdm` pulled into state:modified+ would fail SCHEMA_NOT_FOUND. The
+      #     ternary form also satisfies the ci-isolation-guard static check.
+      #   * dev / devcg -> macros/generate_database_name.sql overrides this to
+      #     databricks_dev (deep-cloned reference_data), so dev MDM builds never
+      #     touch the shared mdm catalog.
+      #   * prod / prod_jobs -> the real `mdm` catalog.
+      +database: "{{ target.database if (target.schema | lower).startswith('dbt_cloud_pr') else 'mdm' }}"
+      +schema: reference_data
+      +tags: ["mdm", "sync"]
+
+    # Historical / point-in-time layer — SCD2 views over the weekly MDM
+    # snapshots (snapshots/mdm_*.sql + patient_insurance.sql). Marts that
+    # present historical periods must join these via as_of_predicate(),
+    # never the current-state dims. See models/historical/_historical__models.yml.
+    historical:
+      +materialized: view
+      +schema: historical
+      +tags: ["historical", "pit"]
+
+    # Conformed Dimensions - shared across all cubes/fact models
+    dimensions:
+      +schema: healthcare
+      +tags: ["dimension", "mdm", "cube", "BIPlatform"]
+
+    # Fact Models - canonical business events
+    facts:
+      +schema: healthcare
+      +tags: ["fact", "cube", "BIPlatform"]
+
+    # V3 BI metric registry — feeds ServingDB Postgres marts_bi_v3.metric() runtime.
+    # See docs/v3-developer-guide.md in the BIPlatform repo.
+    # CDF is handled by global +tblproperties (CREATE TABLE) and the on-run-end
+    # enable_cdf_after_build() safety net; no per-model post-hook needed.
+    # persist_docs writes YAML descriptions as Delta column comments — picked up
+    # by dbt docs, Databricks catalog, and downstream tooling. ServingDB pg_graphql
+    # annotations are generated separately from manifest.json via the macro
+    # v3_generate_servingdb_annotations_from_manifest (see macros/v3_servingdb_cutover.sql).
+    # marts_bi_v3 is no longer ServingDB-synced (DEV-4573 retain set is
+    # healthcare.* + provider_bonus.* only). Per-model meta.servingdb_sync
+    # was removed; do not re-add a schema-level +meta servingdb_sync default.
+    marts_bi_v3:
+      +schema: marts_bi_v3
+      +tags: ["marts_bi_v3", "cube", "BIPlatform", "v3_synced"]
+      +persist_docs:
+        relation: true
+        columns: true
+
+  # Elementary data observability - test results, run results, dbt artifacts
+  # Docs: https://docs.elementary-data.com
+  elementary:
+    +schema: "elementary"
+
+# Seeds configuration
+seeds:
+  healthcare_analytics:
+    +schema: seeds
+    # Clinical reference seeds for the Excel-rubric auto-tier rebuild
+    # (Healthcare Org chronic-condition catalog, HRM/polypharmacy meds,
+    # supplement exclusions, and risk-factor ICD codes). Code columns kept as
+    # strings so leading zeros / alphanumeric ICD prefixes survive the CSV load.
+    clinical_reference:
+      +schema: seeds
+      +tags: ["clinical", "reference", "chronic", "retier"]
+      ref_hh_chronic_conditions:
+        +column_types:
+          category: string
+          condition_name: string
+          icd_prefix_dotless: string
+          icd_prefix_dotted: string
+          notes: string
+      ref_hh_high_risk_meds:
+        +column_types:
+          drug_class: string
+          hrm_class: string
+          match_key: string
+          match_type: string
+          criteria_type: string
+          notes: string
+      ref_hh_med_supplement_exclusions:
+        +column_types:
+          name_pattern: string
+          notes: string
+      ref_tier_risk_factor_codes:
+        +column_types:
+          risk_factor: string
+          icd_code_dotless: string
+          icd_code_dotted: string
+          notes: string
+    # Payor claims reference seeds. Codes are kept as strings so leading zeros
+    # (POS "01", claim types) survive the CSV load.
+    claims_reference:
+      +schema: seeds
+      +tags: ["payor", "claims", "reference"]
+      ref_claims__place_of_service:
+        +column_types:
+          place_of_service_code: string
+          place_of_service_name: string
+          care_setting: string
+      ref_claims__claim_type:
+        +column_types:
+          payor: string
+          source_claim_type: string
+          claim_type_carin: string
+          claim_setting: string
+    quality:
+      +schema: seeds
+      +tags: ["quality", "dev-4296", "reference"]
+      # Codes kept as strings: SNOMED (numeric), CPT, ICD10PCS, and ICD10CM
+      # (alphanumeric Z90.x / C-codes) coexist in one column.
+      # HEDIS MY2026 exclusion value-sets (NCQA Value Set Directory) — externally
+      # sourced but a canonical, payer-agnostic reference. Single `seeds` schema (no
+      # external/reference schema); nature carried on tags. Provenance: re-homed out of
+      # ref_payor_alpha_accepted_codes exclusion rows; value_set col holds the NCQA value-set name.
+      ref_hedis_exclusion_codes:
+        +tags: ["external", "reference", "hedis", "dev-4300", "exclusion"]
+        +column_types:
+          code: string
+          code_type: string
+          exclusion_measure: string
+          value_set: string
+          evidence_class: string
+    marts_bi_v3:
+      +schema: marts_bi_v3
+      +tags: ["marts_bi_v3", "registry"]
+      # Seeds materialise as Delta tables; CDF kept for Delta consumers.
+      # Not ServingDB-synced after DEV-4573 (registry seeds dropped from retain set).
+      +tblproperties:
+        delta.enableChangeDataFeed: "true"
+    audit:
+      +schema: audit
+      +tags: ["audit", "grain", "meta_guard"]
+    cms_hcc_v28:
+      +tags: ["raf", "cms_hcc", "reference"]
+      cms_hcc_v28__age_sex_edits:
+        +column_types:
+          hcc_code: int
+          min_age: int
+          max_age: int
+    cms_hcc_v24:
+      +tags: ["raf", "cms_hcc", "v24", "blend", "reference"]
+      cms_hcc_v24__all_coefficients:
+        +column_types:
+          coefficient_value: "decimal(8,3)"
+      cms_hcc_v24__interaction_coefficients:
+        +column_types:
+          coefficient: "decimal(8,3)"
+    cms_hcc_v28_1:
+      +tags: ["raf", "cms_hcc", "v28_1", "reference"]
+      cms_hcc_v28_1__disease_coefficients:
+        +column_types:
+          coefficient: "decimal(8,3)"
+    cms_hcc_esrd:
+      +tags: ["raf", "cms_hcc", "esrd", "reference"]
+      cms_hcc_esrd__coefficients:
+        +column_types:
+          coefficient_value: "decimal(8,3)"
+      cms_hcc_esrd__hcc_labels:
+        +column_types:
+          hcc_number: int
+    raf_reference:
+      +tags: ["raf", "reference"]
+      # Risk-adjustability CPT gate, acute exclusion, and MMR adjustment-reason
+      # reference tables (from Reference Author's model reference tables).
+      ref_raf__risk_adjustable_cpt:
+        +column_types:
+          cpt_code: string
+          description: string
+          start_date: string
+          end_date: string
+      ref_raf__acute_icd10:
+        +column_types:
+          icd10_code: string
+          description: string
+      ref_raf__mmr_adjustment_reasons:
+        +column_types:
+          adjustment_reason_code: string
+          description: string
+      # Governed payment_year -> diagnosis_coded_year map (the prospective CMS-HCC
+      # distinction). is_scoreable gates which payment years the scored facts emit:
+      # only years with a complete prior-year diagnosis basis given the Oct-2024 EMR
+      # data inception (PY2026 onward). Single source of truth for the year axis.
+      ref_raf__data_collection_periods:
+        +column_types:
+          payment_year: int
+          diagnosis_coded_year: int
+          run_type: string
+          is_scoreable: boolean
+          source_document: string
+          notes: string
+      ref_raf__model_blend_weights:
+        +column_types:
+          payment_year: int
+          blend_weight: "decimal(4,2)"
+          normalization_factor: "decimal(6,3)"
+          coding_intensity_adjustment: "decimal(6,4)"
+      # Frozen snapshot of TWICE raf_staging.year_processing_config (year-lock
+      # config). Replaces the source() read; dbt-owned reference seed.
+      ref_raf__year_processing_config:
+        +column_types:
+          assessment_year: int
+          is_active: boolean
+          is_permanent: boolean
+          stopped_date: timestamp
+          created_date: timestamp
+          notes: string
+      # Frozen snapshot of TWICE raf_staging.patient_enrollment_type (per-patient
+      # CMS enrollment segment). Score-neutral replacement for the source() read.
+      # See JIRA TIC-7529 for canonical derivation follow-up.
+      ref_raf__patient_enrollment_segment:
+        +column_types:
+          patient_id: bigint
+          coded_year: int
+          enrollment_code: string
+          assignment_reason: string
+          assigned_by: string
+          effective_date: date
+          created_at: timestamp
+          updated_at: timestamp
+    provider_bonus:
+      +schema: provider_bonus
+      +tags: ["provider_bonus", "reference"]
+      ref_bonus_payout_tiers:
+        +column_types:
+          min_value: "decimal(7,2)"
+          max_value: "decimal(7,2)"
+          payout_pct: "decimal(5,4)"
+          bonus_weight: "decimal(3,2)"
+          effective_start_date: date
+          effective_end_date: date
+      ref_quality_star_thresholds:
+        +column_types:
+          min_rate: "decimal(7,4)"
+          max_rate: "decimal(7,4)"
+          weight: "decimal(3,1)"
+          effective_start_date: date
+          effective_end_date: date
+      ref_productivity_vu_expectations:
+        +column_types:
+          fte_value: "decimal(4,3)"
+          fte_hours: int
+          expected_weekly_vu: int
+          effective_start_date: date
+          effective_end_date: date
+      ref_provider_eligibility:
+        +column_types:
+          provider_id: bigint
+          scorecard_eligible: boolean
+          bonus_eligible: boolean
+          bonus_eligible_start_date: date
+          bonus_eligible_end_date: date
+          dashboard_location_override: string
+          is_float_provider: boolean
+      ref_productivity_bonus_scale:
+        +column_types:
+          min_utilization_pct: int
+          max_utilization_pct: int
+          bonus_pct: "decimal(5,2)"
+          effective_start_date: date
+          effective_end_date: date
+      ref_vu_freeze_reason_treatment:
+        +column_types:
+          freeze_reason_key: string
+          vu_treatment: string
+          example_athena_labels: string
+          notes: string
+    # MDM Member reference seeds. Governance inputs for the MDM Member spine.
+    # at_risk_payor gating: which payor x MA contract x PBP combinations HH holds
+    # a risk contract with. PRELIMINARY values are inferred from observed feeds
+    # (PAYOR_A H5959, PAYOR_B H2001) pending Finance/Contracting confirmation; plan
+    # 'ALL' means every PBP under that contract is in-scope.
+    mdm:
+      +schema: seeds
+      +tags: ["mdm", "member", "reference"]
+      ref_mdm__risk_contract_scope:
+        +column_types:
+          payor_brand: string
+          ma_contract_number: string
+          plan_benefit_package: string
+          is_at_risk: boolean
+          contract_type: string
+          effective_start_date: date
+          effective_end_date: date
+          source: string
+    # Financial RAF (Revenue segment) reference seeds.
+    # NOTE: kept OUT of the seeds/(cms_hcc_v28|raf_reference|provider_bonus)/
+    # hash-guard pattern in .circleci/config.yml on purpose — these are
+    # refreshed from public CMS data / payor contracts, not hash-locked.
+    finraf:
+      +tags: ["raf", "finance", "reference"]
+      ref_finraf__county_ratebook:
+        +column_types:
+          payment_year: int
+          ssa_county_code: string
+          state: string
+          county_name: string
+          rate_part_ab_5pct_bonus: "decimal(10,2)"
+          rate_part_ab_3_5pct_bonus: "decimal(10,2)"
+          rate_part_ab_0pct_bonus: "decimal(10,2)"
+          rate_part_ab_esrd: "decimal(10,2)"
+          source: string
+      # Template/scaffold seed: one EXAMPLE_TEMPLATE row until Finance/Contracting
+      # supplies the executed MA payor contract terms (one row per active contract).
+      # Not yet wired into fct_raf__member_revenue (projection is gross CMS revenue).
+      ref_finraf__contract_terms:
+        +column_types:
+          contract_id: string
+          payor_name: string
+          ma_contract_number: string
+          plan_benefit_package: string
+          contract_type: string
+          revenue_share_pct: "decimal(5,4)"
+          benchmark_tier: string
+          part_d_included: boolean
+          admin_load_pct: "decimal(5,4)"
+          risk_share_pct: "decimal(5,4)"
+          stop_loss_pmpm: "decimal(10,2)"
+          base_pmpm: "decimal(10,2)"
+          market: string
+          county_scope: string
+          effective_start_date: date
+          effective_end_date: date
+          source: string
+
+      # CMS risk-adjustment data submission deadlines per dates-of-service year.
+      # Drives the sweep classification (INITIAL / MIDYEAR / FINAL) in
+      # int_raf__mao004_eligibility. Sourced from the CMS HPMS deadline memos.
+      ref_finraf__ra_submission_deadlines:
+        +column_types:
+          dos_year: int
+          initial_deadline: date
+          midyear_deadline: date
+          final_deadline: date
+          is_estimated: boolean
+          source: string
+
+# Tests configuration
+# Project default = warn (preserves historical behaviour across the wider
+# healthcare_analytics tree). V3 BI marts + seeds escalate to error so a broken
+# PK / not_null / accepted_values test on the metric-registry path blocks the
+# build before ServingDB mirrors the breakage downstream.
+tests:
+  healthcare_analytics:
+    +severity: warn
+    marts_bi_v3:
+      +severity: error
+
+# Variables
+vars:
+  # Date variables
+  current_year: "{{ modules.datetime.datetime.now().year }}"
+
+  # RAF payment year - controls which year demographic/eligibility models score
+  # Override at runtime: --vars '{raf_payment_year: 2025}' for historical reprocessing
+  raf_payment_year: 2026
+
+  # RAF data inception - the earliest month for which this warehouse has reliable
+  # EMR clinical/claims data. The point-in-time status spine (and everything
+  # downstream: insurance, attribution, scoring) emits NO member-months before
+  # this date. Completed-visit history BEFORE this date is still used for the
+  # 18-month is_active recency lookback; we simply do not fabricate member-months
+  # for periods with no reliable data. Pre-Oct-2024 rows were migrated/ramp-up
+  # noise (visits trickle from 2023 with no clean cutover), so Oct 2024 is the
+  # canonical start. The dashboard further restricts the *displayed* payment
+  # years to 2025-2026 (the first complete reporting years).
+  raf_data_inception_month: '2024-10-01'
+
+  # BCR gold rollups (mart_bcr, mart_bcr_cpt) exclude immaterial CHARGE/PAYMENT
+  # lines below this absolute amount (penny/zero/void noise). Single-sourced so
+  # the models and the rollup-vs-detail reconciliation tests cannot drift.
+  bcr_gold_min_amount: 0.02
+
+  # Catalog references (raw source reads). Raw Fivetran/EHR sources live ONLY in
+  # prod (not cloned to the dev catalog), so dev reads them from prod too. dbt
+  # WRITE routing (incl. mdm reference_data -> databricks_dev under dev) is
+  # handled by the generate_database_name macro, not by these vars.
+  source_catalog: "databricks_prod"
+  mdm_catalog: "mdm"
+
+  # Schema references
+  healthcare_schema: "healthcare"
+  salesforce_schema: "salesforce"
+  reference_schema: "reference_data"
+
+  # Provider Bonus 2026
+  bonus_year: 2026
+  measurement_period_start: "2026-01-01"
+  measurement_period_end: "2026-12-31"
+  snapshot_quarter: null # Override at runtime: --vars '{snapshot_quarter: "2026-Q1"}'
+  minimum_panel_size: 30 # Minimum attributed patients for quality eligibility
+  include_locum_providers: false # Feature flag for locum inclusion
+
+  # Elementary observability config (package-scoped vars).
+  # disable_freshness_results skips ONLY Elementary's on-run-end upload of
+  # `dbt source freshness` results. Under the dbt Fusion engine the freshness
+  # result object does not populate result.to_dict() fields (node.unique_id,
+  # max_loaded_at, adapter_response, ...), so Elementary's
+  # process_freshness_result renders an undefined value and
+  # upload_source_freshness.sql aborts the run with
+  # `[JinjaError (dbt1501)]: Failed to render SQL undefined value`
+  # (dbt-core #12813). The freshness analysis itself succeeds (sources.json is
+  # written); only this upload hook breaks. Disabling it keeps the deploy job's
+  # freshness step green while leaving all other Elementary autoupload
+  # (dbt_artifacts, run_results, tests, invocation) intact.
+  elementary:
+    disable_freshness_results: true
+# NOTE: Time spine configuration is now in models/utilities/_utilities__models.yml
+# using the new YAML-based time_spine configuration (required by MetricFlow)

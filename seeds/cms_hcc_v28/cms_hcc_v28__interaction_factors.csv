@@ -1,0 +1,43 @@
+interaction_name,enrollment_segment,coefficient,cms_label
+DIABETES_HF,CNA,0.112,Diabetes*Heart Failure
+HF_CHR_LUNG,CNA,0.078,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CNA,0.176,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CNA,0.254,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CNA,0.077,Heart Failure*Specified Heart Arrhythmias
+DIABETES_HF,CND,0.023,Diabetes*Heart Failure
+HF_CHR_LUNG,CND,0.062,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CND,0.314,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CND,0.242,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CND,0.257,Heart Failure*Specified Heart Arrhythmias
+gSubUseDisorder_gPsych,CND,0.087,Substance Use Disorder*Psychiatric
+DIABETES_HF,CFA,0.183,Diabetes*Heart Failure
+HF_CHR_LUNG,CFA,0.109,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CFA,0.194,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CFA,0.340,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CFA,0.140,Heart Failure*Specified Heart Arrhythmias
+DIABETES_HF,CFD,0.041,Diabetes*Heart Failure
+HF_CHR_LUNG,CFD,0.097,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CFD,0.420,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CFD,0.275,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CFD,0.372,Heart Failure*Specified Heart Arrhythmias
+gSubUseDisorder_gPsych,CFD,0.152,Substance Use Disorder*Psychiatric
+DIABETES_HF,CPA,0.164,Diabetes*Heart Failure
+HF_CHR_LUNG,CPA,0.140,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CPA,0.140,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CPA,0.329,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CPA,0.135,Heart Failure*Specified Heart Arrhythmias
+DIABETES_HF,CPD,0.053,Diabetes*Heart Failure
+HF_CHR_LUNG,CPD,0.108,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,CPD,0.328,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,CPD,0.270,Chronic Lung Disorder*Cardiorespiratory Failure
+HF_HCC238,CPD,0.314,Heart Failure*Specified Heart Arrhythmias
+gSubUseDisorder_gPsych,CPD,0.149,Substance Use Disorder*Psychiatric
+DIABETES_HF,INS,0.209,Diabetes*Heart Failure
+HF_CHR_LUNG,INS,0.145,Heart Failure*Chronic Lung Disorder
+HF_KIDNEY,INS,0.000,Heart Failure*Kidney
+CHR_LUNG_CARD_RESP_FAIL,INS,0.331,Chronic Lung Disorder*Cardiorespiratory Failure
+DISABLED_CANCER,INS,0.367,Disabled/Cancer
+DISABLED_NEURO,INS,0.154,Disabled/Neurological
+DISABLED_HF,INS,0.488,Disabled/Heart Failure
+DISABLED_CHR_LUNG,INS,0.278,Disabled/Chronic Lung Disorder
+DISABLED_ULCER,INS,0.537,Disabled/Skin Ulcer

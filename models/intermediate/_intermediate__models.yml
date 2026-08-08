@@ -1,0 +1,1403 @@
+version: 2
+
+models:
+  - name: int_patient_status_pit_monthly
+    description: |
+      Point-in-time canonical patient status by month (Active / Inactive /
+      Deleted / Excluded), re-derived AS-OF each month-end from Athena.
+
+      Spine source (2026-06 raf_staging eradication): the (patient_id,
+      status_month) universe is sourced from the canonical dbt-native backfill
+      `hist_patient_status_monthly` (full Athena history, all MDM patients),
+      replacing the migrated TWICE roster.
+
+      Data-inception floor: controlled by the `raf_data_inception_month` var
+      (default 2024-10-01, the first month of reliable EMR clinical/claims data
+      in this warehouse). The model emits NO member-months before this date.
+      Completed-visit history BEFORE the floor is still used for the 18-month
+      is_active recency lookback; we simply do not fabricate member-months for
+      periods with no reliable data. Pre-Oct-2024 was migrated/ramp-up noise.
+
+      Materialization: incremental MERGE on the latest 3 months (immutable once
+      data lands). A first/full-refresh run backfills the entire floored
+      history. Downstream RAF scoring consumes Active vs Inactive only.
+    tests:
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - status_month
+          config:
+            severity: warn
+
+    columns:
+      - name: patient_id
+        tests: [not_null]
+      - name: status_month
+        tests: [not_null]
+
+  - name: int_patient_attribution
+    description: |
+      Patient attribution semantic model for value-based care tracking.
+      Links patients to their attribution status, payor information, and engagement metrics.
+
+      Intermediate model combining patient accounts with attribution records for VBC reporting.
+
+      Primary use cases:
+      - Attribution dashboard reporting
+      - VBC program performance
+      - Patient engagement analysis
+    semantic_model:
+      enabled: true
+    agg_time_dimension: attribution_effective_date
+    columns:
+      - name: account_id
+        description: "Salesforce Account ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+        entity:
+          type: primary
+          name: patient
+      - name: patient_id
+        description: "Athena Patient ID"
+        entity:
+          type: foreign
+          name: athena_patient
+      - name: primary_care_provider_id
+        entity:
+          type: foreign
+          name: provider
+      - name: attribution_effective_date
+        granularity: day
+        dimension:
+          type: time
+      - name: attribution_category
+        description:
+          "Derived attribution category: Attributed, Inactive Attribution, or
+          Not Attributed"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Attributed", "Inactive Attribution", "Not Attributed"]
+        dimension:
+          type: categorical
+      - name: attribution_status
+        dimension:
+          type: categorical
+      - name: attribution_stage
+        dimension:
+          type: categorical
+      - name: attribution_is_active
+        description: "Flag indicating active attribution"
+      - name: attribution_payor_type
+        description: "Attribution payor type (Original Medicare, PAYOR_A, PAYOR_B, etc.)"
+        dimension:
+          type: categorical
+          name: payor_type
+      - name: primary_product_type
+        description: "Insurance product type"
+        dimension:
+          type: categorical
+      - name: attributed_payor
+        dimension:
+          type: categorical
+      - name: risk_tier
+        description: "Patient risk tier classification"
+        dimension:
+          type: categorical
+          name: attribution_risk_tier
+      - name: assigned_clinic
+        dimension:
+          type: categorical
+      - name: patient_status
+        description: >
+          Canonical patient status word values from int_patient_status_computed
+          (Active, Inactive, Prospect, Deleted, Re-Engaging, New Lead, Excluded).
+          NOT raw Athena single-letter codes. See dbtf-v2-migration.md (H1).
+        dimension:
+          type: categorical
+      - name: awv_status
+        dimension:
+          type: categorical
+      - name: awv_visit_status
+        dimension:
+          type: categorical
+      - name: is_off_cadence
+        dimension:
+          type: categorical
+    metrics:
+      - name: total_patient_count
+        type: simple
+        label: "Total Patients"
+        description: "Total number of patients in the attribution system"
+        agg: count_distinct
+        expr: account_id
+      - name: attributed_patient_count
+        type: simple
+        label: "Attributed Patients"
+        description: "Number of actively attributed patients"
+        agg: count_distinct
+        expr: "case when attribution_category = 'Attributed' then account_id end"
+      - name: not_attributed_patient_count
+        type: simple
+        label: "Not Attributed Patients"
+        description: "Number of patients without active attribution"
+        agg: count_distinct
+        expr: "case when attribution_category = 'Not Attributed' then account_id end"
+      - name: total_completed_appointments
+        type: simple
+        label: "Completed Appointments"
+        description: "Total completed appointments across all patients"
+        agg: sum
+        expr: completed_appointment_count
+      - name: total_future_appointments
+        type: simple
+        label: "Future Appointments"
+        description: "Total scheduled future appointments"
+        agg: sum
+        expr: future_appointment_count
+      - name: cancellation_volume
+        type: simple
+        label: "Cancelled Appointments"
+        description: "Total cancelled appointments"
+        agg: sum
+        expr: cancelled_appointment_count
+      - name: patients_with_awv_count
+        type: simple
+        label: "Patients with AWV"
+        description: "Number of patients who completed AWV this year"
+        agg: count_distinct
+        expr: "case when last_awv_date is not null and year(last_awv_date) =
+          year(current_date()) then account_id end"
+      - name: engaged_6m_patient_count
+        type: simple
+        label: "Engaged Patients (6M)"
+        description: "Number of patients engaged within 6 months"
+        agg: count_distinct
+        expr: "case when not coalesce(is_6_months_unengaged, false) then account_id end"
+
+  # NOTE: int_patient_raf_summary removed - dependent staging models unavailable
+
+  - name: int_patient_status_computed
+    description: >
+      Computes enforced patient status by applying business rules on top of raw
+      Athena status. Resolves conflict areas: (1) Active requires a completed
+      visit, otherwise Prospect; (2) No completed visit in 18 months triggers
+      Inactive; (3) Deceased patients (DECEASEDDATE set in Athena) are mapped to
+      Inactive; (4) Athena status 'd' = Deleted (chart removed/merged), NOT
+      deceased. Manually Inactivated patients (Athena 'i') always honor the
+      Athena status. Includes audit date columns from patientaudit and
+      DECEASEDDATE from Athena patient table. Grain: One row per patient_id.
+    config:
+      tags: ["mdm", "patient", "status"]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: computed_status
+        description: >
+          Canonical patient status after business rules. PRIMARY ANCHOR for
+          patient classification across the entire data model. Priority order
+          (May 4 2026): (1) Deceased (DECEASEDDATE set) → Inactive. (2) Athena
+          'd' (chart removed) → Deleted. (3) Has completed visit BUT
+          last_completed > 548 days AND has future scheduled appointment →
+          Re-Engaging (reactivation cohort — previously-Inactive patient who has
+          rebooked but not yet completed the new visit). (4) No completed visit
+          ever AND has a future scheduled appointment (status LIKE 'f%' with
+          APPOINTMENTDATE >= today) → Prospect (patient actively pursuing care
+          for the first time). (5) No completed visit ever AND registered within
+          the last 90 days → New Lead (recently-onboarded, no booking yet —
+          high-intent outreach cohort). (6) No completed visit ever AND no
+          future scheduled AND registered >90 days ago (or unknown) → Excluded
+          (revenue filter — removes ghost / past-cancelled-only / cold-lead
+          patients from the Active/Inactive/Prospect equation). (7) 18-Month
+          Inactivity Rule (last completed > 548 days) → Inactive (fires before
+          manual 'i' to backdate burst-cleanup attrition to the true cliff date;
+          only reached when has_future_scheduled is false because rule 3
+          intercepts the rebooked subset). (8) Athena 'i' → Inactive (voluntary
+          departures within 18mo). (9) Completed visit ≤ 548 days → Active. (10)
+          Athena 'a' fallback → Active (defensive; cannot fire post-rule 6). All
+          appointment scans use is_core_department() which excludes DEPARTMENTID
+          IN (10, 11). NOTE: Athena 'd' = Deleted (chart removed/merged), NOT
+          Deceased. Every downstream model MUST use this instead of raw
+          HealthCloudGA__Active__c or athena patient_status.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Active",
+                    "Inactive",
+                    "Prospect",
+                    "Deleted",
+                    "Excluded",
+                    "Re-Engaging",
+                    "New Lead",
+                  ]
+              config:
+                severity: error
+      - name: status_reason
+        description: >
+          Reason for the computed status: Deceased (Athena Deceased Date),
+          Athena Deleted (Chart Removed), Re-Engaging - Rebooked After 18-Month
+          Lapse, Prospect - Future Scheduled No Completed Visit Yet, New Lead -
+          Registered Within 90 Days No Booking Yet, Excluded - Past Appointments
+          Only No Future Scheduled, Excluded - No Completed Visit Ever, 18-Month
+          Inactivity Rule, Athena Manual Inactive, Completed Visit Within 18
+          Months, or Athena Fallback.
+      - name: has_completed_visit
+        description: "True if the patient has at least one completed appointment
+          (Checked In, Checked Out, or Charge Entered) in a core department
+          (excludes departments 10 and 11)."
+      - name: has_any_appointment
+        description:
+          "True if the patient has at least one non-open-slot appointment in
+          a core department (excludes departments 10 and 11)."
+      - name: has_future_scheduled
+        description:
+          "True if the patient has at least one scheduled appointment (Athena
+          status LIKE 'f%') in a core department with APPOINTMENTDATE >= today
+          and no cancelled datetime. Drives the Prospect bucket for patients
+          without a completed visit yet."
+      - name: completed_visit_count
+        description:
+          "Total number of completed visits (Checked In, Checked Out, or
+          Charge Entered per athena_completed_statuses macro) in core
+          departments."
+      - name: any_appointment_count
+        description: "Total number of non-open-slot appointments in core departments."
+      - name: last_completed_appointment
+        description:
+          "Date of the most recent completed visit (Checked In, Checked Out,
+          or Charge Entered per is_athena_completed macro). Used for 18-month
+          inactivity rule and engagement calculations."
+      - name: next_scheduled_appointment
+        description:
+          "Date of the soonest future scheduled appointment (status LIKE
+          'f%', APPOINTMENTDATE >= today, in a core department). NULL if no such
+          appointment exists."
+      - name: days_since_last_completed
+        description: "Calendar days between current_date() and
+          last_completed_appointment. NULL if patient has no completed visits.
+          Threshold: 548 days (18 months) triggers Inactive status."
+      - name: registration_date
+        description: "Date the patient chart was registered in Athena
+          (REGISTRATIONDATE). Sourced directly from
+          athenahealth.athenaone.patient because stg_mdm__patient does not
+          currently expose it. Drives the New Lead vs Excluded split for
+          patients with no completed visit."
+      - name: days_since_registration
+        description:
+          "Calendar days between current_date() and registration_date. NULL
+          when registration_date is missing. Threshold: ≤ 90 days classifies a
+          no-visit patient as 'New Lead' rather than 'Excluded'."
+      - name: active_date
+        description: >
+          Canonical patient active_date: the date the patient COMPLETED their
+          first visit (first_completed_appointment). Non-null whenever the
+          patient has a completed visit. This is the activation anchor for
+          point-in-time / historical MoM panel reports. Salesforce
+          First_Scheduled_Date__pc is retained only as the diagnostic
+          sf_first_scheduled_at column and is NOT the active_date source.
+      - name: sf_first_scheduled_at
+        description: "Raw SF First_Scheduled_Date__pc cast to timestamp (diagnostic input to active_date)."
+      - name: athena_active_audit_date
+        description: "Legacy audit-derived active date (max EVENTDATETIME where NEWVALUE='a' in patientaudit). Retained for diagnostics; not canonical post-DEV-4165."
+      - name: inactive_date
+        description: >
+          Canonical inactive_date — the date the patient transitioned to
+          Inactive status, backdated to the earliest concrete evidence of
+          disengagement. Unified "first transition" formula (dbtf v3, 2026-06-05):
+            Deceased  → athena_deceased_date
+            Otherwise → GREATEST(LCV+1,
+                          LEAST(first_service_recovery_case_date,
+                                last_substantive_outbound_call_date,
+                                first_inactive_audit_after_lcv,
+                                LCV + 548 days))
+          Note: first_service_recovery_case_date and
+          last_substantive_outbound_call_date are currently always NULL —
+          unwired stubs (WHERE 1=0 CTEs; TODOs in int_patient_status_computed.sql).
+          The LEAST therefore degrades to the remaining wired inputs.
+          The 18-month cliff (LCV+548) participates in the LEAST as a ceiling,
+          so an early manual 'i' flag (on/after LCV) keeps its own date while a
+          late or absent flag falls back to the cliff. first_inactive_audit_after_lcv
+          is the earliest manual 'i' audit on/after the last completed visit
+          (stale pre-visit flags are excluded). Wiped to NULL when
+          computed_status != 'Inactive'. Always floored at LCV+1 day. Salesforce
+          last_modified is NEVER used. See dbtf-v2-migration.md (C4 + H6).
+      - name: prospect_date
+        description: "Most recent date patient status was changed to Prospect in Athena"
+      - name: deleted_date
+        description:
+          "Date patient status was changed to 'd' (Deleted/Chart Removed) in
+          Athena audit trail"
+      - name: athena_deceased_date
+        description:
+          "DECEASEDDATE from athenahealth.athenaone.patient — actual date of
+          death. Patients with this date set are computed as Inactive regardless
+          of Athena status code."
+
+  - name: int_primary_insurance
+    description: >
+      Canonical primary insurance per patient. This is the PRIMARY ANCHOR for
+      Active Primary Insurance across the data model. Uses a priority waterfall:
+      (1) Latest completed appointment's insurance — resolved via claim billed →
+      eligibility verified → appointment set (same logic as
+      vw_operating_review_appointments). (2) Fallback to Athena patientinsurance
+      seq=1 joined to insurance_plans dimension. Self-Pay is deprioritized at
+      both levels. For historical appointment-level insurance at a specific
+      point in time, use vw_operating_review_appointments directly. Grain: One
+      row per patient_id.
+    config:
+      tags: ["mdm", "insurance", "canonical"]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: primary_insurance_name
+        description: >
+          Standardized insurance package name from MDM. This is the patient's
+          current primary insurance. For historical accuracy at appointment
+          level, use vw_operating_review_appointments.primary_insurance_name
+          instead.
+      - name: primary_payor_category
+        description: >
+          6-value payor category: Original Medicare, Medicare Advantage,
+          Medicare Supplement, Commercial, Medicaid, No Insurance Set. Derived
+          from MDM insurance_plans dimension. Self-Pay and patients without a
+          current seq-1 patientinsurance record both get 'No Insurance Set'.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Original Medicare",
+                    "Medicare Advantage",
+                    "Medicare Supplement",
+                    "Commercial",
+                    "Medicaid",
+                    "No Insurance Set",
+                  ]
+              config:
+                severity: error
+      - name: primary_payor_brand
+        description:
+          "Normalized carrier brand: PAYOR_A, PAYOR_B, Payor Epsilon, Payor Delta,
+          PAYOR_C, Medicare FFS, etc."
+      - name: primary_payor_type
+        description: "VBC attribution grouping for payor-specific dashboards"
+      - name: primary_is_medicare
+        description: "True if primary insurance is any Medicare type (Original,
+          Advantage, or Supplement)"
+      - name: primary_insurance_status
+        description:
+          "Derived status: Active, Self-Pay Only, or eligibility status from
+          Athena"
+      - name: primary_insurance_source
+        description: >
+          Where the insurance was resolved from: 'Claim' (claim billed),
+          'Eligibility' (eligibility check), 'Appointment' (appointment set), or
+          'Patient Insurance (Seq 1)' (fallback to patientinsurance seq=1).
+          Higher priority sources are more reliable.
+      - name: primary_insurance_as_of_date
+        description:
+          "Date when this insurance was last confirmed — appointment date for
+          waterfall, last modified for seq-1"
+      - name: insurance_package_id
+        description:
+          "Athena Insurance Package ID from seq-1 (always present) — join key
+          to insurance_plans dimension"
+
+  - name: int_secondary_insurance
+    description: >
+      Canonical secondary insurance per patient. Mirrors int_primary_insurance
+      but resolves the secondary (seq-2) insurance slot using the same waterfall
+      approach: (1) Latest completed appointment's secondary insurance —
+      resolved via claim CLAIMSECONDARYPATIENTINSID → eligibility
+      ALTPATIENTINSURANCEID → appointment SECONDARYPATIENTINSURANCEID. (2)
+      Fallback to Athena patientinsurance seq=2 joined to insurance_plans
+      dimension. Key use case: Dual Eligible detection by comparing primary vs
+      secondary payor categories. Grain: One row per patient_id (only patients
+      with secondary insurance).
+    config:
+      tags: ["mdm", "insurance", "canonical"]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: secondary_insurance_name
+        description: "Standardized secondary insurance package name from MDM"
+      - name: secondary_payor_category
+        description: >
+          6-value payor category for secondary insurance: Original Medicare,
+          Medicare Advantage, Medicare Supplement, Commercial, Medicaid, No
+          Insurance Set.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Original Medicare",
+                    "Medicare Advantage",
+                    "Medicare Supplement",
+                    "Commercial",
+                    "Medicaid",
+                    "No Insurance Set",
+                  ]
+              config:
+                severity: warn
+      - name: secondary_payor_brand
+        description: "Normalized carrier brand for secondary insurance"
+      - name: secondary_is_medicare
+        description: "True if secondary insurance is any Medicare type"
+      - name: secondary_is_medigap
+        description: "True if secondary insurance is a Medigap/Medicare Supplement plan"
+      - name: secondary_insurance_source
+        description:
+          "Where the secondary insurance was resolved from: Appointment
+          Waterfall or Patient Insurance (Seq 2)"
+      - name: secondary_insurance_as_of_date
+        description: "Date when this secondary insurance was last confirmed"
+      - name: secondary_insurance_package_id
+        description: "Athena Insurance Package ID from seq-2 — join key to
+          insurance_plans dimension"
+
+  - name: int_tertiary_insurance
+    description: >
+      Canonical tertiary insurance per patient. Resolves from Athena
+      patientinsurance seq=3 only — no claim or appointment-level waterfall
+      exists for tertiary. Very low volume (~64 patients). Included for
+      completeness and Dual Eligible edge cases where Medicaid appears as
+      tertiary. Grain: One row per patient_id (only patients with tertiary
+      insurance).
+    config:
+      tags: ["mdm", "insurance", "canonical"]
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: tertiary_insurance_name
+        description: "Standardized tertiary insurance package name from MDM"
+      - name: tertiary_payor_category
+        description: "6-value payor category for tertiary insurance"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Original Medicare",
+                    "Medicare Advantage",
+                    "Medicare Supplement",
+                    "Commercial",
+                    "Medicaid",
+                    "No Insurance Set",
+                  ]
+              config:
+                severity: warn
+      - name: tertiary_payor_brand
+        description: "Normalized carrier brand for tertiary insurance"
+      - name: tertiary_is_medicare
+        description: "True if tertiary insurance is any Medicare type"
+      - name: tertiary_insurance_source
+        description:
+          "Always 'Patient Insurance (Seq 3)' — only source available for
+          tertiary"
+      - name: tertiary_insurance_package_id
+        description: "Athena Insurance Package ID from seq-3"
+
+  - name: int_patient_insurance_monthly
+    description: >
+      Monthly patient insurance derived from the appointment-level waterfall in
+      vw_operating_review_appointments (claim billed → eligibility verified →
+      appointment set), enriched with the full insurance_plans MDM dimension
+      classification. For months without appointments, the most recent
+      appointment's insurance is forward-filled. For patients with no
+      appointment history, int_primary_insurance (seq-1) provides the fallback.
+      Insurance resolution source is tracked for auditability. Spine:
+      stg_raf__patient_status_monthly (patient × month). Grain: One row per
+      patient_id × status_month.
+    config:
+      tags: ["mdm", "insurance", "canonical", "raf"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - status_month
+    columns:
+      - name: patient_id
+        description: "Athena Patient ID"
+        tests:
+          - not_null
+      - name: status_month
+        description: "Month-end date from the patient status monthly spine"
+        tests:
+          - not_null
+      - name: insurance_name
+        description:
+          "Primary insurance plan name resolved via appointment waterfall or
+          seq-1 fallback"
+      - name: payor_category
+        description: >
+          MDM canonical payor category: Original Medicare, Medicare Advantage,
+          Medicare Supplement, Commercial, Medicaid, Unknown, No Insurance Set.
+      - name: payor_brand
+        description:
+          "Normalized carrier brand: PAYOR_A, PAYOR_B, Payor Epsilon, Payor Delta,
+          PAYOR_C, Medicare FFS, etc."
+      - name: payor_type
+        description: "VBC attribution grouping for payor-specific dashboards"
+      - name: insurance_product_type
+        description:
+          "Insurance product type (Medicare HMO, Medicare PPO, Medicare
+          B-Traditional, etc.)"
+      - name: is_medicare
+        description:
+          "True if insurance is any Medicare type (Original, Advantage, or
+          Supplement)"
+      - name: is_medigap
+        description: "True if insurance is a Medigap/Medicare Supplement plan"
+      - name: irc_group
+        description: "Insurance Reporting Category group from Athena MDM"
+      - name: government_funded_type
+        description: "Government funding classification (Medicare, Medicaid, CHIP, etc.)"
+      - name: secondary_insurance_name
+        description: "Secondary insurance name from appointment waterfall (forward-filled)"
+      - name: secondary_insurance_category
+        description: "Secondary insurance category from appointment waterfall"
+      - name: insurance_resolution_source
+        description: >
+          How insurance was resolved for this patient-month: 'Appointment (Same
+          Month)' when a completed appointment exists that month, 'Appointment
+          (Forward-Fill)' when carried from a prior month, 'Seq-1 Fallback' when
+          using current patientinsurance, or 'None'.
+      - name: insurance_as_of_date
+        description:
+          "Date of the appointment that provided the insurance (NULL for
+          seq-1 fallback)"
+      - name: waterfall_source
+        description:
+          "Which level of the appointment waterfall won: Claim, Eligibility,
+          or Appointment"
+      - name: primary_patient_insurance_id
+        description: "Winning PATIENTINSURANCEID from the appointment waterfall or seq-1"
+
+  - name: int_attribution_payor_slots
+    description: >
+      Canonical primary and secondary attributed payor per patient. Dual-attribution
+      patients use BIPlatform.attribution_decisions (EligibilityAPI eligibility / human review);
+      single-payor patients use their only roster payor. No org-volume hierarchy.
+      Grain: one row per patient_id on current EMPI attribution.
+    tests:
+      # Catch a pending-rate spike: dual-attribution decisions silently collapse
+      # to attribution_source='pending' whenever the reviewer snapshot_hash stops
+      # byte-matching the sorted payor set (any roster/format drift). A shift in
+      # the attribution_source mix is the earliest signal of that breakage.
+      - elementary.dimension_anomalies:
+          arguments:
+            dimensions: ["attribution_source"]
+            timestamp_column: attribution_slots_updated_at
+            time_bucket:
+              period: day
+              count: 1
+          config:
+            severity: warn
+            tags: ["elementary", "dimension", "attribution"]
+    columns:
+      - name: patient_id
+        tests:
+          - unique
+          - not_null
+      - name: primary_attribution_payor
+        description: >
+          Active primary attributed payor. Null when dual-attributed and no
+          valid attribution_decisions row (attribution_source = pending).
+      - name: secondary_attribution_payor
+        description: "Second attributed payor when payor_attribution_count > 1."
+      - name: attribution_source
+        description: "single_payor | eligibility_decision | pending | unattributed"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - single_payor
+                  - eligibility_decision
+                  - pending
+                  - unattributed
+
+  - name: int_attribution_payor_slots_pit
+    description: >
+      Point-in-time, reviewer-honored attributed payor. For each
+      (patient_id, target_month) resolves the single attributed payor effective
+      that month: sole roster payor when one; the reviewer's decided primary
+      (backendbaas attribution_decisions) when 2+ AND the decision snapshot matches
+      that month's payor set; else null (pending). Grain: one row per
+      patient_id x target_month with roster attribution.
+    columns:
+      - name: patient_id
+        description: "Athena patient ID"
+      - name: target_month
+        description: "Month (first day) the attribution is resolved as-of"
+      - name: attributed_payor
+        description: >
+          Single reviewer-honored attributed payor effective in target_month;
+          null when unattributed or the dual-attribution decision is pending.
+      - name: attributed_payor_as_of_month
+        description: "Roster as-of month grounding the resolution"
+      - name: attribution_source
+        description: "single_payor | eligibility_decision | pending | unattributed"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - single_payor
+                  - eligibility_decision
+                  - pending
+                  - unattributed
+      - name: payor_attribution_count
+        description: "Distinct payors attributing the patient in target_month"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - target_month
+
+  - name: int_attribution_global
+    description: >
+      Global Attribution Population Funnel — single source of truth for patient
+      attribution. Provides a clean population funnel: Active Patient → MDM
+      Insurance Category → EMPI Attributed (by payor/subtype) → Voluntary →
+      Unattributed. Primary/secondary payors from int_attribution_payor_slots
+      (BackendBaaS attribution_decisions). Grain: One row per active patient_id.
+    config:
+      tags: ["attribution", "cube", "BIPlatform", "mdm", "hourly"]
+      contract:
+        enforced: true
+    tests:
+      # Detect distribution shifts between attributed and unattributed populations.
+      - elementary.dimension_anomalies:
+          arguments:
+            dimensions: ["population_segment"]
+            timestamp_column: source_updated_at
+            time_bucket:
+              period: day
+              count: 7
+          config:
+            severity: warn
+            tags: ["elementary", "dimension", "attribution"]
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: patient_id
+        data_type: bigint
+        description: "Athena Patient ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: salesforce_id
+        data_type: string
+        description: "Salesforce Account ID"
+      - name: golden_id
+        data_type: string
+        description: "EMPI golden record ID"
+      - name: patient_name
+        data_type: string
+        description: "Patient full name (first + last)"
+      - name: patient_date_of_birth
+        data_type: date
+        description: "Patient date of birth"
+      - name: patient_status
+        data_type: string
+        description: "Patient computed status (always Active for this model)"
+      - name: preferred_clinic
+        data_type: string
+        description: "Patient preferred clinic"
+      - name: primary_provider_id
+        data_type: bigint
+        description:
+          "Athena PRIMARYPROVIDERID — canonical join key for the patient's
+          primary care provider."
+      - name: primary_care_provider
+        data_type: string
+        description:
+          "Primary care provider display name (resolved from providers
+          dimension via primary_provider_id)."
+      - name: mdm_payor_category
+        data_type: string
+        description: >
+          MDM canonical payor category from int_primary_insurance: Original
+          Medicare, Medicare Advantage, Medicare Supplement, Commercial,
+          Medicaid, No Insurance Set.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Original Medicare",
+                    "Medicare Advantage",
+                    "Medicare Supplement",
+                    "Commercial",
+                    "Medicaid",
+                    "No Insurance Set",
+                  ]
+              config:
+                severity: warn
+      - name: mdm_payor_brand
+        data_type: string
+        description: "Primary payor brand from MDM (e.g. PAYOR_A, PAYOR_B, PAYOR_C)"
+      - name: mdm_payor_type
+        data_type: string
+        description: "Primary payor type from MDM"
+      - name: mdm_insurance_plan
+        data_type: string
+        description: "MDM insurance plan name"
+      - name: is_empi_attributed
+        data_type: boolean
+        description: "True if patient appears on any current EMPI-matched payor roster"
+      - name: primary_attributed_payor
+        data_type: string
+        description:
+          "Primary attributed payor from int_attribution_payor_slots (decision-driven
+          for dual attribution; sole payor when only one roster attribution)."
+      - name: secondary_attributed_payor
+        data_type: string
+        description: "Secondary attributed payor when patient has dual attribution."
+      - name: attribution_slot_source
+        data_type: string
+        description: "Provenance: single_payor | eligibility_decision | pending"
+      - name: primary_attribution_subtype
+        data_type: string
+        description: "Attribution subtype for primary payor (payor roster code;
+          Medicare uses MSSP mbr_typ_cd such as Aged/Non-Dual / Aged/Dual / Disabled)"
+      - name: is_voluntary
+        data_type: boolean
+        description:
+          "True if primary_attribution_classification = 'VOLUNTARY_ALIGNED_ONLY'
+          (Medicare voluntary alignment). CLAIMS_STEP_* CMS labels are retired."
+      - name: all_attributed_payors
+        data_type: string
+        description: "Comma-separated list of all current attributed payors"
+      - name: attributed_payor_count
+        data_type: bigint
+        description: "Count of distinct payors attributing this patient"
+      - name: sf_payor_type
+        data_type: string
+        description: "Salesforce payor type from Attribution__c"
+      - name: sf_is_active_attribution
+        data_type: boolean
+        description: "True if SF Attribution is active"
+      - name: awv_visit_status
+        data_type: string
+        description: "Annual Wellness Visit status from SF Attribution"
+      - name: mddo_visit_status
+        data_type: string
+        description: "MDDO visit status from SF Attribution"
+      - name: off_cadence_active
+        data_type: boolean
+        description: "True if patient is flagged Off Cadence in SF Attribution"
+      - name: sf_attribution_stage
+        data_type: string
+        description: "SF attribution stage (e.g. New, Active, Termed)"
+      - name: is_net_attributed
+        data_type: boolean
+        description: "True when EMPI-attributed and not Medicare voluntary-only
+          (attributed minus voluntary)"
+      - name: population_segment
+        data_type: string
+        description: "Derived segment: 'Attributed - Voluntary', 'Attributed -
+          Claims/Roster', or 'Unattributed'"
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  [
+                    "Attributed - Voluntary",
+                    "Attributed - Claims/Roster",
+                    "Unattributed",
+                  ]
+              config:
+                severity: error
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Change-tracking timestamp from patients.last_updated_at for
+          CDF/ServingDB refresh"
+
+  - name: int_attribution_roster_spans
+    description: >
+      Canonical patient attribution spans by payor roster appearance. Each span
+      runs from a roster file month until the patient is omitted on a later payor
+      file, or through the current month when still attributed. Shared by BCR and
+      Volume Attribution point-in-time models.
+    config:
+      tags: ["attribution", "cube", "BIPlatform", "vbc", "hourly", "bcr"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - identity_id
+              - attributed_payor
+              - span_start
+    columns:
+      - name: golden_id
+        data_type: string
+      - name: identity_id
+        data_type: string
+        tests:
+          - not_null
+      - name: patient_id
+        data_type: bigint
+      - name: is_ghost
+        data_type: boolean
+        description: "True when the attributed identity has no matched Athena chart."
+      - name: match_status
+        data_type: string
+        description: "EMPI roster match state propagated from attribution history."
+      - name: is_vendorblue
+        data_type: boolean
+        description: "True for PAYOR_B H2001 identities classified to the VendorBlue TIN."
+      - name: attributed_payor
+        data_type: string
+        tests:
+          - not_null
+      - name: span_start
+        data_type: date
+        tests:
+          - not_null
+      - name: last_presence_month
+        data_type: date
+        description: "Latest contiguous month where this identity appeared in an actual payer roster file."
+      - name: span_end
+        data_type: date
+        tests:
+          - not_null
+
+  - name: int_attribution_point_in_time
+    description: >
+      Point-in-time attribution model keyed by target month. Expands
+      int_attribution_roster_spans so each patient appears for every target month
+      within their active attribution span (carry-forward until dropped on a later
+      payor file, otherwise through the current month). This model feeds both BIPlatform
+      attribution analysis and the ServingDB/Excel monthly timeline. The roster
+      evidence fields distinguish actual file-month presence from carry-forward
+      months and preserve roster-only EMPI metadata.
+    config:
+      tags: ["attribution", "cube", "BIPlatform", "vbc", "hourly"]
+      contract:
+        enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - identity_id
+              - target_month
+              - roster_payor
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: target_month
+            time_bucket:
+              period: month
+              count: 1
+          config:
+            severity: warn
+            tags: ["elementary", "data_volume", "attribution"]
+    columns:
+      - name: account_id
+        data_type: string
+        description:
+          "Salesforce Account ID for the patient record in the target month
+          snapshot (nullable for EMPI-only patients)"
+      - name: roster_payor
+        data_type: string
+        description:
+          "Payor represented by the effective roster for the selected target
+          month"
+        tests:
+          - not_null
+      - name: target_month
+        data_type: timestamp
+        description: "The analysis month selected by dashboard filters (UTC timestamp at month start)"
+        tests:
+          - not_null
+      - name: target_year_month
+        data_type: string
+        description: "As-of month key in YYYY-MM format"
+      - name: effective_month
+        data_type: date
+        description: "Span-start roster month for this attribution period (first payor file that opened the active span)"
+      - name: effective_year_month
+        data_type: string
+        description: "Effective roster month key in YYYY-MM format"
+      - name: is_current_target
+        data_type: boolean
+        description: "True when the row belongs to the latest available target month"
+      - name: is_exact_month_match
+        data_type: boolean
+        description: "True when target month equals the span-start roster file month (not a carry-forward month)"
+      - name: latest_roster_month_used
+        data_type: date
+        description: "Latest actual roster month available on or before the target month."
+      - name: is_exact_roster_month
+        data_type: boolean
+        description: "True when the identity appeared in an actual roster file for the target month; false when carried forward."
+      - name: roster_year_month
+        data_type: string
+        description: "Raw roster release month in YYYY-MM format"
+      - name: attribution_year
+        data_type: int
+        description: "Calendar year of attribution snapshot"
+      - name: golden_id
+        data_type: string
+        description: "EMPI golden patient identifier"
+      - name: identity_id
+        data_type: string
+        description: "{{ doc('identity_id') }}"
+        tests:
+          - not_null
+      - name: athena_patient_id
+        data_type: bigint
+        description: "Athena patient identifier"
+      - name: is_ghost
+        data_type: boolean
+        description: "True when the attributed identity has no matched Athena chart."
+      - name: match_status
+        data_type: string
+        description: "EMPI roster match state propagated from attribution history."
+      - name: is_vendorblue
+        data_type: boolean
+        description: "True for PAYOR_B H2001 identities classified to the VendorBlue TIN."
+      - name: enterprise_id
+        data_type: "decimal(10,0)"
+        description: "Enterprise patient identifier from MDM bridge"
+      - name: patient_name
+        data_type: string
+        description: "Patient full name"
+      - name: patient_first_name
+        data_type: string
+        description: "Patient first name"
+      - name: patient_last_name
+        data_type: string
+        description: "Patient last name"
+      - name: patient_id
+        data_type: string
+        description: "Salesforce patient identifier (Athena patient ID on account)"
+      - name: patient_dob
+        data_type: date
+        description: "Patient date of birth"
+      - name: patient_gender
+        data_type: string
+        description: "Patient gender"
+      - name: patient_status
+        data_type: string
+        description: "Patient status classification"
+      - name: is_active_patient
+        data_type: boolean
+        description: "True when patient is considered active"
+      - name: risk_tier
+        data_type: string
+        description: "Patient risk tier"
+      - name: clinic
+        data_type: string
+        description: "Standardized clinic name"
+      - name: provider_id
+        data_type: string
+        description: "Primary care provider identifier (Salesforce contact / MDM join key)"
+      - name: provider_name
+        data_type: string
+        description: "Assigned provider name"
+      - name: provider_npi
+        data_type: string
+        description: "Assigned provider NPI"
+      - name: provider_credentials
+        data_type: string
+        description: "Assigned provider credentials"
+      - name: is_physician
+        data_type: boolean
+        description: "True when assigned provider is physician"
+      - name: provider_specialty
+        data_type: string
+        description: "Assigned provider specialty"
+      - name: mdm_assigned_clinic
+        data_type: string
+        description: "MDM-assigned clinic value"
+      - name: primary_payor
+        data_type: string
+        description: "Primary insurance payor"
+      - name: primary_product_type
+        data_type: string
+        description: "Primary insurance product type"
+      - name: secondary_payor
+        data_type: string
+        description: "Secondary insurance payor"
+      - name: secondary_product_type
+        data_type: string
+        description: "Secondary insurance product type"
+      - name: sf_attributed_payor
+        data_type: string
+        description: "Attributed payor from Salesforce"
+      - name: awv_visit_status
+        data_type: string
+        description: "AWV visit status"
+      - name: awv_case_status
+        data_type: string
+        description: "AWV case status"
+      - name: awv_sub_status
+        data_type: string
+        description: "AWV case sub-status"
+      - name: awv_is_actionable
+        data_type: boolean
+        description: "True when AWV case is actionable"
+      - name: awv_is_completed
+        data_type: boolean
+        description: "True when AWV is completed"
+      - name: awv_is_scheduled
+        data_type: boolean
+        description: "True when AWV is scheduled"
+      - name: mddo_visit_status
+        data_type: string
+        description: "MDDO visit status"
+      - name: mddo_case_status
+        data_type: string
+        description: "MDDO case status"
+      - name: mddo_sub_status
+        data_type: string
+        description: "MDDO case sub-status"
+      - name: mddo_is_actionable
+        data_type: boolean
+        description: "True when MDDO case is actionable"
+      - name: mddo_is_completed
+        data_type: boolean
+        description: "True when MDDO is completed"
+      - name: mddo_is_scheduled
+        data_type: boolean
+        description: "True when MDDO is scheduled"
+      - name: off_cadence_active
+        data_type: boolean
+        description: "Off-cadence active indicator"
+      - name: off_cadence_status
+        data_type: string
+        description: "Off-cadence status from Salesforce Attribution"
+      - name: sf_attribution_status
+        data_type: string
+        description: "Salesforce attribution status"
+      - name: sf_attribution_is_active
+        data_type: boolean
+        description: "True when Salesforce attribution record is active"
+      - name: is_6_months_unengaged
+        data_type: boolean
+        description: "True when patient is unengaged at 6 months"
+      - name: is_12_months_unengaged
+        data_type: boolean
+        description: "True when patient is unengaged at 12 months"
+      - name: is_18_months_inactive
+        data_type: boolean
+        description: "True when patient is inactive at 18 months"
+      - name: last_awv_date
+        data_type: date
+        description: "Most recent AWV date"
+      - name: last_completed_visit_date
+        data_type: timestamp
+        description: "Most recent completed visit date"
+      - name: sf_next_visit_date
+        data_type: timestamp
+        description: "Next visit date from Salesforce"
+      - name: sf_next_visit_type
+        data_type: string
+        description: "Next visit type from Salesforce"
+      - name: membership_enrollment
+        data_type: string
+        description: "Membership enrollment status"
+      - name: membership_eligible
+        data_type: boolean
+        description: "True when patient is membership-eligible"
+      - name: completed_appointment_count
+        data_type: double
+        description: "Count of completed appointments"
+      - name: future_appointment_count
+        data_type: double
+        description: "Count of future scheduled appointments"
+      - name: cancelled_appointment_count
+        data_type: double
+        description: "Count of cancelled appointments"
+      - name: validation_status
+        data_type: string
+        description: "Validation status indicator"
+      - name: needs_review
+        data_type: boolean
+        description: "True when record requires review"
+      - name: action_required
+        data_type: string
+        description: "Action-required categorization"
+      - name: source_updated_at
+        data_type: timestamp
+        description:
+          "Source-system timestamp tracking when upstream data last changed
+          (replaces view_refresh_timestamp for CDF-accurate change detection)"
+      - name: payor_attribution_count
+        data_type: bigint
+        description:
+          "Distinct payors attributing this identity in the target month
+          (carry-forward). 1 for single-payor; 2+ for dual/multi attribution."
+      - name: net_attributed_payor
+        data_type: string
+        description: >
+          Single NET attributed payor for the identity in the target month (raw
+          roster LESS dual-attribution overrides): the sole payor when one;
+          the BIPlatform reviewer's decided primary when 2+ and the decision snapshot
+          matches that month's payor set; otherwise a deterministic priority
+          fallback (MEDICARE > PAYOR_C > PAYOR_B > PAYOR_A > PAYOR_DELTA > AHA >
+          first listed) when a dual decision is pending — never null for
+          attributed identity-months.
+      - name: is_net_primary
+        data_type: boolean
+        description:
+          "True when this roster_payor row is the identity's NET attributed payor
+          for the target month. Filter is_net_primary = true (and pivot by
+          net_attributed_payor) to count each patient once under one payor."
+
+  - name: int_attribution_provider_match
+    description: >
+      Crosswalk that resolves the payor-supplied "Attributed Provider" string
+      from each monthly roster (PAYOR_A, PAYOR_B, MEDICARE, AHA, PAYOR_C,
+      Payor Delta) to a canonical MDM provider record. Two-tier match: (1)
+      NPI exact join to providers.npi for payors that supply NPI (PAYOR_B,
+      PAYOR_A-numeric, AHA, MEDICARE-when-numeric); (2) normalized-name join
+      against providers.payor_match_keys for the rest. Unmatched inputs are kept
+      with match_method='unmatched' so consumers can audit gaps. The MEDICARE
+      leg is sourced from the VendorBlue MSSP Attribution Overview file filtered
+      to Healthcare Org TIN (883504663) so non-Healthcare NPIs do not resolve to
+      Healthcare's MDM provider directory. CMS beneficiary file (TIN-only) is
+      attributed provider. Grain: one row per (payor, raw_npi, raw_name).
+    config:
+      tags: ["attribution", "mdm", "provider", "empi"]
+    columns:
+      - name: payor
+        description: "Payor label: PAYOR_A, PAYOR_B, MEDICARE, AHA, PAYOR_C, PAYOR_DELTA"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  ["PAYOR_A", "PAYOR_B", "MEDICARE", "AHA", "PAYOR_C", "PAYOR_DELTA"]
+      - name: raw_npi
+        description: "Raw 10-digit NPI value supplied by the payor (null when absent)"
+      - name: raw_name
+        description: "Raw attributed-provider name string as supplied by the payor"
+      - name: raw_name_key
+        description: "Normalized form of raw_name produced by normalize_provider_name macro"
+      - name: matched_provider_id
+        description: "Resolved Athena provider_id (null when match_method = 'unmatched')"
+      - name: matched_provider_name
+        description: "Canonical MDM provider_name for the matched provider"
+      - name: matched_npi
+        description: "Canonical MDM NPI for the matched provider"
+      - name: match_method
+        description: >
+          How the row was resolved: 'npi' (exact NPI join), 'name' (normalized
+          full-name match against payor_match_keys), 'last_name' (single-token
+          raw_name uniquely matched to one MDM provider's last name — mostly
+          PAYOR_A rows where only provider_last_name was supplied), or 'unmatched'.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["npi", "name", "last_name", "unmatched"]
+
+  - name: int_provider_by_contact
+    description: >
+      One MDM provider row per Salesforce Contact Id. Grain: salesforce_contact_id.
+    config:
+      tags: ["intermediate", "mdm", "provider"]
+    columns:
+      - name: salesforce_contact_id
+        tests:
+          - not_null
+          - unique
+
+  - name: int_provider_capacity
+    description: "Intermediate model for provider capacity and scheduling metrics"
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: provider_name
+        description: "Full provider name"
+      - name: is_physician
+        description: "Flag indicating provider is a physician"
+      - name: completion_rate
+        description: "Appointment completion rate percentage"
+      - name: cancellation_rate
+        description: "Appointment cancellation rate percentage"
+      - name: no_show_rate
+        description: "Appointment no-show rate percentage"
+
+  - name: int_provider_entra_crosswalk
+    description: >
+      Athena provider_id joined to MDM Staff Entra identity via trinet_employee_id.
+      Export surface for BackendBaaS BIPlatform.mdm_provider seed and DotSideBar provider
+      resolve. Grain: one row per provider_id. Entra fields null when unmatched.
+    config:
+      tags: ["mdm", "provider", "entra"]
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+          - not_null
+      - name: provider_name
+        description: "Provider display name from MDM"
+      - name: npi
+        description: "National Provider Identifier"
+      - name: trinet_employee_id
+        description: "TriNet employee identifier (join key to staff)"
+      - name: assigned_clinic
+        description: "Assigned clinic from MDM provider sync"
+      - name: location_name
+        description: "TriNet / MDM location name"
+      - name: is_active
+        description: "Provider active flag from MDM"
+      - name: is_physician
+        description: "Physician classification flag"
+      - name: is_mid_level
+        description: "Mid-level (NP/PA) classification flag"
+      - name: is_bh_provider
+        description: "Behavioral health provider flag"
+      - name: has_trinet_match
+        description: "True when provider has a TriNet employee id"
+      - name: entra_id
+        description: "Entra object id from MDM Staff (null if unmatched)"
+      - name: staff_email
+        description: "Work email from MDM Staff (null if unmatched)"
+      - name: staff_full_name
+        description: "Staff full name from MDM Staff"
+      - name: has_entra_match
+        description: "True when entra_id is present"
+      - name: last_updated_at
+        description: "Provider last_updated_at from MDM"
+
+  - name: int_provider_trinet_crosswalk
+    description: >
+      Maps Athena provider_id to TriNet employee via manual seed overrides and
+      automated first_name + last_name matching (preferring 213B clinical
+      entity). Grain: One row per provider_id.
+    config:
+      tags: ["mdm", "provider", "trinet"]
+    columns:
+      - name: provider_id
+        description: "Athena Provider ID (Primary Key)"
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: trinet_employee_id
+        description: "TriNet employee identifier"
+      - name: company_id
+        description: "TriNet company code (e.g. 213B for clinical entity)"
+      - name: trinet_business_title
+        description: "Job title from TriNet"
+      - name: trinet_hire_date
+        description: "Hire date from TriNet"
+      - name: trinet_original_hire_date
+        description: "Original hire date from TriNet"
+      - name: trinet_termination_date
+        description: "Termination date from TriNet (null if active)"
+      - name: trinet_employee_status
+        description: "Employee status code from TriNet (A = Active)"
+      - name: trinet_employment_type
+        description: "Employment type from TriNet"
+      - name: trinet_standard_hours
+        description: "Standard weekly hours from TriNet"
+      - name: trinet_regular_temporary
+        description: "Regular vs temporary classification from TriNet"
+      - name: trinet_supervisor_id
+        description: "Supervisor employee ID from TriNet"
+      - name: trinet_supervisor_name
+        description: "Supervisor name from TriNet"
+      - name: trinet_department_id
+        description: "Department ID from TriNet"
+      - name: trinet_department_name
+        description: "Department name from TriNet"
+      - name: trinet_location_id
+        description: "Location ID from TriNet"
+      - name: trinet_location_name
+        description: "Location name from TriNet"
+
+  - name: int_empi_golden_records_clean
+    description: >
+      Deduped, ServingDB-synced surface for the EMPI golden records landed by the
+      Splink probabilistic-matching notebook. Materialised as an incremental-merge
+      TABLE aliased `empi_golden_records` in the healthcare schema — it OWNS the
+      relation ServingDB syncs to `empi_golden_records_synced`
+      (PK=(source_system, source_id), TRIGGERED CDF). Reads
+      `empi_golden_records_raw` and keeps one row per (source_system, source_id)
+      (most recent updated_at). Do not key on source_id alone — that deletes
+      legitimate cross-system rows (PREFECT-191).
+    config:
+      materialized: incremental
+      incremental_strategy: merge
+      unique_key: ["source_system", "source_id"]
+      schema: healthcare
+      alias: empi_golden_records
+      tags: ["empi", "servingdb_candidate", "intermediate", "v3_synced"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - source_system
+              - source_id
+      - elementary.volume_anomalies:
+          arguments:
+            timestamp_column: source_updated_at
+          config:
+            severity: warn
+            tags: ["elementary", "freshness"]
+    columns:
+      - name: source_id
+        description: "Patient ID from the source system (part of composite PK)"
+        constraints:
+          - type: not_null
+        tests:
+          - not_null
+      - name: golden_id
+        description: "Golden Record ID from Splink"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system (ATHENA, SALESFORCE, AHA, MEDICARE, …)"
+        tests:
+          - not_null
+      - name: updated_at
+        description: "Source updated_at; used as dedupe-order column"
+      - name: source_updated_at
+        description: "CDF watermark for ServingDB TRIGGERED sync (aliased from updated_at)"

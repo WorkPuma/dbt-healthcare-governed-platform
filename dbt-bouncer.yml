@@ -1,0 +1,101 @@
+# =============================================================================
+# dbt-bouncer Configuration
+# MDM Compliance Rules for CI/CD Validation
+#
+# Install: pip install dbt-bouncer
+# Run: dbt-bouncer --config-file dbt-bouncer.yml
+#
+# This validates dbt project conventions including MDM compliance.
+# Add to CI/CD pipeline to enforce rules before deployment.
+# =============================================================================
+
+dbt_artifacts_dir: target/
+
+# Custom checks directory for MDM compliance
+custom_checks_dir: custom_checks
+
+# =============================================================================
+# MANIFEST CHECKS - Validate project structure and conventions
+# =============================================================================
+manifest_checks:
+  # ---------------------------------------------------------------------------
+  # SERVINGDB SYNC METADATA / DESCRIPTION CHECKS — RETIRED (DEV-4573)
+  # These custom checks enforced the full ServingDB sync metadata contract
+  # (servingdb_sync + servingdb_mode + contract.enforced + surrogate PK with
+  # not_null+unique, plus description coverage) on `models/marts_bi_v3/`,
+  # which was the ServingDB boundary. The BIPlatform dashboard ServingDB dependencies
+  # were retired in DEV-4573: marts_bi_v3 is no longer synced, and the sync is
+  # shrunk to 11 retained Clinics/Provider-Scorecard + external-ODBC-consumer
+  # tables (see CUTOVER.md). Those 11 were never in the marts_bi_v3 scope and
+  # several don't satisfy the full contract (e.g. contract.enforced /
+  # snapshot_reason), so the checks are removed rather than re-scoped —
+  # parse_manifest only needs `meta.servingdb_sync: true` + a usable PK, which
+  # the 11 already have. Re-establish a lighter retained-set contract later if
+  # desired. The check implementations remain in custom_checks/manifest/.
+  # ---------------------------------------------------------------------------
+
+
+  # ---------------------------------------------------------------------------
+  # MDM COMPLIANCE CHECK (Custom)
+  # Validates that models referencing source tables (appointment, provider, etc.)
+  # also include the corresponding MDM source in their dependencies.
+  #
+  # This detects violations at the model dependency level, ensuring developers
+  # have properly joined MDM tables in their SQL.
+  #
+  # Rules enforced:
+  #   - athenahealth.*.appointment -> requires mdm.appointment_type
+  #   - athenahealth.*.provider    -> requires mdm.provider
+  #   - athenahealth.*.department  -> requires mdm.department
+  #   - athenahealth.*.patient     -> requires mdm.patient
+  #   - athenahealth.*.insurance*  -> requires mdm.insurance_package
+  #
+  # Exemptions:
+  #   - Add `meta: mdm_exempt: true` to exempt a model globally
+  #   - Add `meta: mdm_exempt_<rule>: true` for rule-specific exemption
+  #     (e.g., mdm_exempt_appointment, mdm_exempt_provider)
+  # ---------------------------------------------------------------------------
+  - name: check_mdm_source_compliance
+    include: ^models/
+
+  # ---------------------------------------------------------------------------
+  # Model Naming Conventions
+  # ---------------------------------------------------------------------------
+  - name: check_model_names
+    include: ^models/staging
+    model_name_pattern: ^stg_
+
+  - name: check_model_names
+    include: ^models/intermediate
+    model_name_pattern: ^int_
+
+  - name: check_model_names
+    include: ^models/marts
+    model_name_pattern: ^(dim_|fct_|mart_)
+
+  # ---------------------------------------------------------------------------
+  # Model Documentation Requirements
+  # ---------------------------------------------------------------------------
+  - name: check_model_has_description
+    include: ^models/(marts|intermediate)
+
+  - name: check_model_has_meta_keys
+    include: ^models/
+    keys:
+      - owner
+
+  # ---------------------------------------------------------------------------
+  # Test Requirements
+  # ---------------------------------------------------------------------------
+  - name: check_model_has_tests
+    include: ^models/(marts|intermediate)
+    min_number_of_tests: 1
+
+  # ---------------------------------------------------------------------------
+  # Source Requirements (for MDM compliance tracking)
+  # ---------------------------------------------------------------------------
+  - name: check_source_has_description
+    include: ^models/sources
+
+  - name: check_source_has_freshness
+    include: ^models/sources/athenahealth

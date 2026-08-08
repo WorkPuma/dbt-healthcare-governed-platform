@@ -1,0 +1,60 @@
+version: 2
+
+# Derived BH metrics built from the simple metrics that live on the
+# v_bh_patient_panel_reporting semantic_model. The view was rewritten
+# to snake_case on 2026-05-11 so its semantic_model is Fusion-compatible.
+
+metrics:
+  - name: care_plan_completion_rate
+    description: "Share of BH panel patients with a documented BH care plan"
+    label: "BH Care Plan Completion Rate"
+    type: derived
+    expr: "patients_with_care_plan * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_with_care_plan
+      - name: total_bh_patients
+
+  - name: treatment_plan_completion_rate
+    description: "Share of BH panel patients with a documented BH treatment plan"
+    label: "BH Treatment Plan Completion Rate"
+    type: derived
+    expr: "patients_with_treatment_plan * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_with_treatment_plan
+      - name: total_bh_patients
+
+  - name: documentation_complete_rate
+    description: "Share of BH patients with both care plan and treatment plan complete"
+    label: "Complete BH Documentation Rate"
+    type: derived
+    expr: "patients_complete_documentation * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_complete_documentation
+      - name: total_bh_patients
+
+  - name: phq9_remission_rate
+    description: "Share of BH patients in PHQ-9 remission (latest score < 5)"
+    label: "PHQ-9 Remission Rate"
+    type: derived
+    expr: "patients_phq9_in_remission * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_phq9_in_remission
+      - name: total_bh_patients
+
+  - name: gad7_remission_rate
+    description: "Share of BH patients in GAD-7 remission (latest score < 5)"
+    label: "GAD-7 Remission Rate"
+    type: derived
+    expr: "patients_gad7_in_remission * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_gad7_in_remission
+      - name: total_bh_patients
+
+  - name: phq9_treatment_response_rate
+    description: "Share of BH patients with PHQ-9 treatment response (>= 50% reduction)"
+    label: "PHQ-9 Treatment Response Rate"
+    type: derived
+    expr: "patients_phq9_treatment_response * 100.0 / nullif(total_bh_patients, 0)"
+    input_metrics:
+      - name: patients_phq9_treatment_response
+      - name: total_bh_patients

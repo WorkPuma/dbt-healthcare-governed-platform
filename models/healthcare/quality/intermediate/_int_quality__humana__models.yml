@@ -1,0 +1,237 @@
+version: 2
+
+# Schema — DEV-4296 PAYOR_C sidecar intermediates.
+# PAYOR_C glossary assignment -> per-measure submission gating -> P16 no-gate aggregate ->
+# gap/closure summary. Mirrors the shape of _int_quality__models.yml (payer-agnostic funnel)
+# but PAYOR_C-native predicates (Constitution P14: never leak PAYOR_C logic into the shared path).
+
+models:
+  - name: int_quality__payor_gamma_measure_evidence
+    description: >
+      Path-B PAYOR_C measure assignment — code_pool joined to the PAYOR_C glossary
+      (dev_gyasi.seeds.seed_payor_gamma_accepted_codes via the payor_gamma_glossary source) to
+      derive measure + layout_location per code. wide_net (Constitution P2): no
+      within-measure eligibility filter here; the roster gate, value-attach, P6 numeric
+      gate, and submittable gate land downstream in int_quality__payor_gamma_submission.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure
+        description: "PAYOR_C HEDIS measure abbreviation the code was assigned to (e.g. 'KED', 'COL-E')."
+        data_tests: [not_null]
+      - name: layout_location
+        description: "49-col layout column this code routes to downstream."
+        data_tests: [not_null]
+      - name: col_modality
+        description: "COL-E only: which colorectal screening modality (FOBT/FITDNA/SIG/CTC/COLONOSCOPY/COL_OTHER); 'NA' for non-COL-E measures."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['FOBT', 'FITDNA', 'SIG', 'CTC', 'COLONOSCOPY', 'COL_OTHER', 'NA']
+      - name: is_exclusion
+        description: "'Y' if the code is a P9 permanent-exclusion value set (mastectomy/hysterectomy/absence-of-cervix/colectomy/colorectal-cancer/nephrectomy); ships at any service date, bypassing the window + P6 gate downstream."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Y', 'N']
+      - name: code
+        description: "The accepted code (ICD dotless, matched against the dotted glossary via replace)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "code_pool code-type classifier; restricted by the join to the types the PAYOR_C glossary maps."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['ICD10CM', 'ICD10PCS', 'SNOMED', 'CPT', 'CPT_II', 'CPT_III', 'HCPCS', 'LOINC']
+      - name: date_of_service
+        description: "Service date of the evidence, carried through from code_pool."
+        data_tests: [not_null]
+      - name: order_status
+        description: "code_pool order/billing status (e.g. 'submittable'); the submittable gate is applied downstream."
+      - name: evidence_provenance
+        description: "Best evidence-provenance tier carried through from code_pool (billed/closed_encounter/resulted/surgical/soft)."
+      - name: code_origin
+        description: "Provenance tier carried through from code_pool ('system' or 'org_added')."
+      - name: create_date
+        description: "Row create date carried through from code_pool."
+
+  - name: int_quality__payor_gamma_submission
+    description: >
+      PAYOR_C sidecar submission — assigned evidence (int_quality__payor_gamma_measure_evidence)
+      gated by roster, in-scope measure spec, per-measure MY2026 window, value-attach, P6
+      numeric-required, and submittable. Adds the bp_vitals branch (BP readings for
+      CBP/BPD-E) and the col_qm_fallback branch (athena QM-satisfied colorectal screening
+      with no native code). Grain: patient x measure x code x date_of_service. OSW's window is
+      on/between the member's 65th birthday (dob + 780 months) and MY-12-31; a null DOB falls
+      back to a broad 120-month lookback so evidence is never silently dropped.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure
+        description: "PAYOR_C HEDIS measure abbreviation the code was assigned to (e.g. 'KED', 'COL-E')."
+        data_tests: [not_null]
+      - name: layout_location
+        description: "49-col layout column this code routes to downstream."
+        data_tests: [not_null]
+      - name: code
+        description: "NULL for the bp_vitals branch (BP is a value-pair, not a code)."
+      - name: code_type
+        description: "code_pool code-type classifier (ICD10CM/CPT/CPT_II/HCPCS/LOINC/SNOMED)."
+      - name: date_of_service
+        description: "Service date of the evidence, carried through from code_pool."
+        data_tests: [not_null]
+      - name: result_value
+        description: "Numeric/text result attached from the shared measure_dated_evidence funnel; required (non-null) when requires_numeric_result='Y'."
+      - name: requires_numeric_result
+        description: "'Y' if the measure requires a numeric result_value to count (else 'N')."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Y', 'N']
+      - name: order_status
+        description: "code_pool order/billing status; 'submittable' rows pass the downstream submittable gate."
+      - name: evidence_provenance
+        description: "Best evidence-provenance tier carried through from code_pool (billed/closed_encounter/resulted/surgical/soft)."
+      - name: code_origin
+        description: "code origin carried through from code_pool ('system' or 'org_added')."
+      - name: measurement_year
+        description: "Measurement year (HEDIS reporting year); dynamic var, default = current calendar year."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+
+  - name: int_quality__payor_gamma_aggregate
+    description: >
+      The AGGREGATE that feeds fct_quality__payor_gamma_contract_output (Constitution P16): ALL
+      Coding-Glossary codes in-scope for PAYOR_C roster members, ALL dates, results where
+      present — NO date window and NO P6 numeric gate (PAYOR_C screens the window/age-range/
+      duplicates on their side). Same coded + bp_vitals + col_qm_fallback branch shape as
+      int_quality__payor_gamma_submission, minus the window + P6 gate.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_C, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure
+        description: "PAYOR_C HEDIS measure abbreviation the code was assigned to (e.g. 'KED', 'COL-E')."
+        data_tests: [not_null]
+      - name: layout_location
+        description: "49-col layout column this code routes to downstream."
+        data_tests: [not_null]
+      - name: code
+        description: "NULL for the bp_vitals branch (BP is a value-pair, not a code)."
+      - name: code_type
+        description: "code_pool code-type classifier (ICD10CM/CPT/CPT_II/HCPCS/LOINC/SNOMED)."
+      - name: date_of_service
+        description: "Service date of the evidence, carried through from code_pool."
+        data_tests: [not_null]
+      - name: result_value
+        description: "Numeric/text result attached from the shared measure_dated_evidence funnel; required (non-null) when requires_numeric_result='Y'."
+      - name: requires_numeric_result
+        description: "'Y' if the measure requires a numeric result_value to count (else 'N')."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Y', 'N']
+      - name: order_status
+        description: "code_pool order/billing status; 'submittable' rows pass the downstream submittable gate."
+      - name: evidence_provenance
+        description: "Best evidence-provenance tier carried through from code_pool (billed/closed_encounter/resulted/surgical/soft)."
+      - name: code_origin
+        description: "code origin carried through from code_pool ('system' or 'org_added')."
+      - name: measurement_year
+        description: "Measurement year (HEDIS reporting year); dynamic var, default = current calendar year."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]
+
+  - name: int_quality__payor_gamma_measure_evidence_summary
+    description: >
+      PAYOR_C gap/closure layer (patient x measure grain). Combines has_code (submittable
+      native evidence) with athena's own QM-engine opinion to derive a closure_tier the gap
+      mart reads. Denominator (v1, QM-anchored) is roster members that either carry a
+      submittable code or have any athena QM opinion for the measure.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_C, dev-4296]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - measure
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure
+        description: "PAYOR_C HEDIS measure abbreviation the code was assigned to (e.g. 'KED', 'COL-E')."
+        data_tests: [not_null]
+      - name: has_code
+        description: "1 if the patient has a submittable PAYOR_C row for the measure (KED requires both eGFR+uACR); else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: athena_quality
+        description: "1 if athena's QM engine has any opinion for the measure."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: athena_quality_satisfied
+        description: "1 if athena's QM engine marks the measure SATISFIED, else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: is_excluded
+        description: "1 if the patient is excluded from the measure denominator (e.g. permanent exclusion), else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: has_diabetes
+        description: "1 if the patient has a diabetes diagnosis (relevant for KED eligibility), else 0."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: closure_tier
+        description: "Strongest-wins tier: EXCLUDED > CODED_NATIVE > QM_MET_NO_CODE > VALUE_ONLY > POSSIBLE_CLOSURE > OPEN_GAP (plus KED_INCOMPLETE_PAIR / NOT_ELIGIBLE_NONDIABETIC)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['NOT_ELIGIBLE_NONDIABETIC', 'EXCLUDED', 'CODED_NATIVE', 'KED_INCOMPLETE_PAIR', 'QM_MET_NO_CODE', 'POSSIBLE_CLOSURE', 'OPEN_GAP']
+      - name: gap_reason
+        description: "Human-readable explanation for the closure_tier."
+        data_tests: [not_null]
+      - name: measurement_year
+        description: "Measurement year (HEDIS reporting year); dynamic var, default = current calendar year."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["{{ var('measurement_year', modules.datetime.date.today().year) }}"]

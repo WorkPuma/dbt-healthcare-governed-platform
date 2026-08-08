@@ -1,0 +1,67 @@
+version: 2
+
+seeds:
+  - name: ref_claims__place_of_service
+    description: >
+      CMS Place of Service (POS) code set with a coarse care_setting grouping
+      used to drive the payor-claims care_setting derivation. Public CMS data;
+      not license-restricted.
+    config:
+      tags: ["payor", "claims", "reference", "seed"]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["place_of_service_code"]
+          config:
+            severity: error
+    columns:
+      - name: place_of_service_code
+        description: "2-char CMS POS code (zero-padded, kept as string)"
+        data_tests:
+          - not_null
+          - unique
+      - name: place_of_service_name
+        data_tests:
+          - not_null
+      - name: care_setting
+        description: "Coarse setting grouping consumed by fct_payor__claims.care_setting"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["office", "home", "telehealth", "inpatient", "outpatient",
+                         "emergency", "urgent_care", "ambulatory_surgery",
+                         "skilled_nursing", "nursing_facility", "hospice",
+                         "ambulance", "laboratory", "pharmacy", "other"]
+
+  - name: ref_claims__claim_type
+    description: >
+      Per-payor source claim-type code mapped to the CARIN Blue Button / CPCDS
+      claim-type value set (institutional / outpatient / professional /
+      pharmacy / oral / vision) plus a coarse claim_setting.
+    config:
+      tags: ["payor", "claims", "reference", "seed"]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["payor", "source_claim_type"]
+          config:
+            severity: error
+    columns:
+      - name: payor
+        data_tests:
+          - not_null
+      - name: source_claim_type
+        description: "Payor-native claim type token (e.g. PAYOR_A PR/IP/OP/RX)"
+        data_tests:
+          - not_null
+      - name: claim_type_carin
+        description: "CARIN/CPCDS claim-type value"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["institutional", "outpatient", "professional",
+                         "pharmacy", "oral", "vision"]
+      - name: claim_setting
+        data_tests:
+          - not_null

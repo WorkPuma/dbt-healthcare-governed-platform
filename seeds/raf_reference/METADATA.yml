@@ -1,0 +1,68 @@
+source: Healthcare Org internal reference data
+last_updated: '2026-02-13'
+updated_by: data_engineering
+files:
+  ref_raf__enrollment_type.csv:
+    sha256: 6211996fb241a182f4c39b6784a8001e8bf218b0425a42821361f830ca34dcd4
+    description: Enrollment type codes and eligibility segment mapping
+    expected_rows_min: 3
+    expected_rows_max: 50
+  ref_raf__normalization_factors.csv:
+    sha256: cc3193ecb77700ff0ffb8722fe59425ec10d977f2da7d8837b0355e6f06c99b1
+    description: CMS normalization factors by payment year
+    expected_rows_min: 1
+    expected_rows_max: 20
+  ref_raf__test_exclusions.csv:
+    sha256: 51ca35f0a46f70f472ff676ed81f5324a6ebf0548f225ff036c6d79c9dc480e0
+    description: Test patient exclusion list (excluded from RAF scoring)
+    expected_rows_min: 1
+    expected_rows_max: 500
+  ref_raf__data_collection_periods.csv:
+    sha256: 779356e09243d2b2469deba87e131747447f127f3c01cb2acddf8b69bec9a239
+    description: CMS payment year to diagnosis data collection year mapping per CMS
+      Implementation Memo
+    expected_rows_min: 2
+    expected_rows_max: 20
+  ref_raf__frs_run_windows.csv:
+    sha256: 31cde8cb66d9a9fa58028d1e350d63221a7fc5a4720db1da728575a7739b859e
+    description: reference FRS forecast run windows (mid-year DOS window + enroll snapshot
+      per payment year) reproducing the reference @date/@DOSBegin/@DOSEnd parameters
+    expected_rows_min: 1
+    expected_rows_max: 20
+  ref_raf__model_blend_weights.csv:
+    sha256: 9a88687a330fb980e2def79a21402e872cfc207ebf776a347b413f11b1d87912
+    description: CMS V24/V28 payment-year blend weights with per-version normalization
+      and coding-intensity factors (V24->V28 transition blend)
+    expected_rows_min: 1
+    expected_rows_max: 20
+  ref_raf__year_processing_config.csv:
+    sha256: 457bc655e9152323c0240a013b861c372d25540cc5233a45f2b01a2779649f90
+    description: Frozen snapshot of TWICE raf_staging.year_processing_config (RAF
+      year-lock config). dbt-owned replacement for the raf_staging source.
+    expected_rows_min: 1
+    expected_rows_max: 20
+  ref_raf__patient_enrollment_segment.csv:
+    sha256: de7d9493fa8e2f968846087564c23d7724dd040c981f0481bbb92cba3ad9ca58
+    description: Frozen snapshot of TWICE raf_staging.patient_enrollment_type (per-patient
+      CMS enrollment segment, CNA/NE only). Score-neutral source replacement; canonical
+      derivation tracked in JIRA TIC-7529.
+    expected_rows_min: 10000
+    expected_rows_max: 60000
+  ref_raf__acute_icd10.csv:
+    sha256: 912634e03abf33cf66a083f889e2754e05d84f1db04d15fb1b39cd988a0a1521
+    description: CMS acute diagnosis codes excluded from risk-adjustable RAF capture
+      (from Reference Author's model reference tables).
+    expected_rows_min: 13493
+    expected_rows_max: 13513
+  ref_raf__mmr_adjustment_reasons.csv:
+    sha256: 013bbd8485bda00f1d8dce063d0c5ce0a18dbca962790b308bca666eb8faa181
+    description: CMS MMR adjustment reason code reference (from Reference Author's model
+      reference tables).
+    expected_rows_min: 40
+    expected_rows_max: 60
+  ref_raf__risk_adjustable_cpt.csv:
+    sha256: 705ed11a9639384e1464dfede630af6aa89df546e18af1e9448200c69af02105
+    description: CPT/HCPCS codes that qualify an encounter for RAF-eligible diagnosis
+      capture (from Reference Author's model reference tables).
+    expected_rows_min: 6947
+    expected_rows_max: 6967

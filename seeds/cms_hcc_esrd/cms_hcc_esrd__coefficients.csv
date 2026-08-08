@@ -1,0 +1,903 @@
+coefficient_key,coefficient_value,coefficient_type,segment,cms_label
+ActAdj_DUR4_9,0.905,demographic,ActAdj,Actuarial Adjustment for the Functioning Graft New Enrollee Duration Since Transplant of 4-9 Months
+ActAdj_DUR10PL,0.698,demographic,ActAdj,Actuarial Adjustment for the Functioning Graft New Enrollee Duration Since Transplant of 10 Months or More
+DI_F0_34,0.644,demographic,DI,Female 0-34
+DI_F35_44,0.630,demographic,DI,Female 35-44
+DI_F45_54,0.564,demographic,DI,Female 45-54
+DI_F55_59,0.570,demographic,DI,Female 55-59
+DI_F60_64,0.569,demographic,DI,Female 60-64
+DI_F65_69,0.630,demographic,DI,Female 65-69
+DI_F70_74,0.624,demographic,DI,Female 70-74
+DI_F75_79,0.617,demographic,DI,Female 75-79
+DI_F80_84,0.661,demographic,DI,Female 80-84
+DI_F85_89,0.629,demographic,DI,Female 85-89
+DI_F90_94,0.629,demographic,DI,Female 90-94
+DI_F95_GT,0.629,demographic,DI,Female 95+
+DI_M0_34,0.616,demographic,DI,Male 0-34
+DI_M35_44,0.604,demographic,DI,Male 35-44
+DI_M45_54,0.551,demographic,DI,Male 45-54
+DI_M55_59,0.557,demographic,DI,Male 55-59
+DI_M60_64,0.569,demographic,DI,Male 60-64
+DI_M65_69,0.577,demographic,DI,Male 65-69
+DI_M70_74,0.551,demographic,DI,Male 70-74
+DI_M75_79,0.601,demographic,DI,Male 75-79
+DI_M80_84,0.635,demographic,DI,Male 80-84
+DI_M85_89,0.635,demographic,DI,Male 85-89
+DI_M90_94,0.635,demographic,DI,Male 90-94
+DI_M95_GT,0.635,demographic,DI,Male 95+
+DI_FBDual_Female_Aged,0.060,demographic,DI,Full Benefit Dual Female Aged
+DI_FBDual_Female_NonAged,0.082,demographic,DI,Full Benefit Dual Female NonAged
+DI_FBDual_Male_Aged,0.128,demographic,DI,Full Benefit Dual Male Aged
+DI_FBDual_Male_NonAged,0.076,demographic,DI,Full Benefit Dual Male NonAged
+DI_PBDual_Female_Aged,0.000,demographic,DI,Partial Benefit Dual Female Aged
+DI_PBDual_Female_NonAged,0.000,demographic,DI,Partial Benefit Dual Female NonAged
+DI_PBDual_Male_Aged,0.000,demographic,DI,Partial Benefit Dual Male Aged
+DI_PBDual_Male_NonAged,0.000,demographic,DI,Partial Benefit Dual Male NonAged
+DI_OriginallyDisabled_Female,0.024,demographic,DI,Originally Disabled Female
+DI_OriginallyDisabled_Male,0.000,demographic,DI,Originally Disabled Male
+DI_Originally_ESRD_Female,-0.024,demographic,DI,Originally ESRD Female
+DI_Originally_ESRD_Male,0.017,demographic,DI,Originally ESRD Male
+DI_LTI_Aged,0.020,demographic,DI,Institutional/Aged
+DI_LTI_NonAged,0.098,interaction,DI,Institutional/NonAged
+DI_HCC1,0.122,disease,DI,HIV/AIDS
+DI_HCC2,0.087,disease,DI,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+DI_HCC6,0.076,disease,DI,Opportunistic Infections
+DI_HCC8,0.353,disease,DI,Metastatic Cancer and Acute Leukemia
+DI_HCC9,0.181,disease,DI,Lung and Other Severe Cancers
+DI_HCC10,0.111,disease,DI,Lymphoma and Other Cancers
+DI_HCC11,0.059,disease,DI,Colorectal/Bladder/and Other Cancers
+DI_HCC12,0.045,disease,DI,Breast/Prostate/and Other Cancers and Tumors
+DI_HCC17,0.084,disease,DI,Diabetes with Acute Complications
+DI_HCC18,0.084,disease,DI,Diabetes with Chronic Complications
+DI_HCC19,0.084,disease,DI,Diabetes without Complication
+DI_HCC21,0.068,disease,DI,Protein-Calorie Malnutrition
+DI_HCC22,0.081,disease,DI,Morbid Obesity
+DI_HCC23,0.036,disease,DI,Other Significant Endocrine and Metabolic Disorders
+DI_HCC27,0.196,disease,DI,End-Stage Liver Disease
+DI_HCC28,0.069,disease,DI,Cirrhosis of Liver
+DI_HCC29,0.061,disease,DI,Chronic Hepatitis
+DI_HCC33,0.078,disease,DI,Intestinal Obstruction/Perforation
+DI_HCC34,0.068,disease,DI,Chronic Pancreatitis
+DI_HCC35,0.048,disease,DI,Inflammatory Bowel Disease
+DI_HCC39,0.092,disease,DI,Bone/Joint/Muscle Infections/Necrosis
+DI_HCC40,0.058,disease,DI,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+DI_HCC46,0.223,disease,DI,Severe Hematological Disorders
+DI_HCC47,0.078,disease,DI,Disorders of Immunity
+DI_HCC48,0.063,disease,DI,Coagulation Defects and Other Specified Hematological Disorders
+DI_HCC51,0.042,disease,DI,Dementia With Complications
+DI_HCC52,0.042,disease,DI,Dementia Without Complication
+DI_HCC54,0.111,disease,DI,Substance Use with Psychotic Complications
+DI_HCC55,0.111,disease,DI,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+DI_HCC56,0.111,disease,DI,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+DI_HCC57,0.111,disease,DI,Schizophrenia
+DI_HCC58,0.111,disease,DI,Reactive and Unspecified Psychosis
+DI_HCC59,0.066,disease,DI,Major Depressive/Bipolar/and Paranoid Disorders
+DI_HCC60,0.066,disease,DI,Personality Disorders
+DI_HCC70,0.185,disease,DI,Quadriplegia
+DI_HCC71,0.151,disease,DI,Paraplegia
+DI_HCC72,0.099,disease,DI,Spinal Cord Disorders/Injuries
+DI_HCC73,0.213,disease,DI,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+DI_HCC74,0.057,disease,DI,Cerebral Palsy
+DI_HCC75,0.074,disease,DI,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+DI_HCC76,0.136,disease,DI,Muscular Dystrophy
+DI_HCC77,0.111,disease,DI,Multiple Sclerosis
+DI_HCC78,0.079,disease,DI,Parkinsons and Huntingtons Diseases
+DI_HCC79,0.053,disease,DI,Seizure Disorders and Convulsions
+DI_HCC80,0.076,disease,DI,Coma/Brain Compression/Anoxic Damage
+DI_HCC82,0.161,disease,DI,Respirator Dependence/Tracheostomy Status
+DI_HCC83,0.112,disease,DI,Respiratory Arrest
+DI_HCC84,0.061,disease,DI,Cardio-Respiratory Failure and Shock
+DI_HCC85,0.063,disease,DI,Congestive Heart Failure
+DI_HCC86,0.151,disease,DI,Acute Myocardial Infarction
+DI_HCC87,0.120,disease,DI,Unstable Angina and Other Acute Ischemic Heart Disease
+DI_HCC88,0.043,disease,DI,Angina Pectoris
+DI_HCC96,0.049,disease,DI,Specified Heart Arrhythmias
+DI_HCC99,0.062,disease,DI,Intracranial Hemorrhage
+DI_HCC100,0.062,disease,DI,Ischemic or Unspecified Stroke
+DI_HCC103,0.071,disease,DI,Hemiplegia/Hemiparesis
+DI_HCC104,0.047,disease,DI,Monoplegia/Other Paralytic Syndromes
+DI_HCC106,0.358,disease,DI,Atherosclerosis of the Extremities with Ulceration or Gangrene
+DI_HCC107,0.144,disease,DI,Vascular Disease with Complications
+DI_HCC108,0.073,disease,DI,Vascular Disease
+DI_HCC110,0.125,disease,DI,Cystic Fibrosis
+DI_HCC111,0.058,disease,DI,Chronic Obstructive Pulmonary Disease
+DI_HCC112,0.058,disease,DI,Fibrosis of Lung and Other Chronic Lung Disorders
+DI_HCC114,0.090,disease,DI,Aspiration and Specified Bacterial Pneumonias
+DI_HCC115,0.030,disease,DI,Pneumococcal Pneumonia/Empyema/Lung Abscess
+DI_HCC122,0.006,disease,DI,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+DI_HCC124,0.057,disease,DI,Exudative Macular Degeneration
+DI_HCC134,0.000,disease,DI,Dialysis Status
+DI_HCC135,0.000,disease,DI,Acute Renal Failure
+DI_HCC136,0.000,disease,DI,Chronic Kidney Disease/Stage 5
+DI_HCC137,0.000,disease,DI,Chronic Kidney Disease/Severe (Stage 4)
+DI_HCC138,0.000,disease,DI,Chronic Kidney Disease/Moderate (Stage 3)
+DI_HCC157,0.219,disease,DI,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+DI_HCC158,0.158,disease,DI,Pressure Ulcer of Skin with Full Thickness Skin Loss
+DI_HCC159,0.127,disease,DI,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+DI_HCC161,0.127,disease,DI,Chronic Ulcer of Skin/Except Pressure
+DI_HCC162,0.155,disease,DI,Severe Skin Burn or Condition
+DI_HCC166,0.076,disease,DI,Severe Head Injury
+DI_HCC167,0.043,disease,DI,Major Head Injury
+DI_HCC169,0.099,disease,DI,Vertebral Fractures without Spinal Cord Injury
+DI_HCC170,0.063,disease,DI,Hip Fracture/Dislocation
+DI_HCC173,0.050,disease,DI,Traumatic Amputations and Complications
+DI_HCC176,0.000,disease,DI,Complications of Specified Implanted Device or Graft
+DI_HCC186,0.138,disease,DI,Major Organ Transplant or Replacement Status
+DI_HCC188,0.087,disease,DI,Artificial Openings for Feeding or Elimination
+DI_HCC189,0.081,disease,DI,Amputation Status/Lower Limb/Amputation Complications
+DI_HCC47_gCancer,0.048,interaction,DI,Immune Disorders*Cancer
+DI_DIABETES_CHF,0.000,interaction,DI,Congestive Heart Failure*Diabetes
+DI_CHF_gCopdCF,0.003,interaction,DI,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+DI_HCC85_gRenal_V24,0.000,interaction,DI,Congestive Heart Failure*Renal
+DI_gCopdCF_CARD_RESP_FAIL,0.029,interaction,DI,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+DI_HCC85_HCC96,0.050,disease,DI,Congestive Heart Failure*Specified Heart Arrhythmias
+DI_NONAGED_gSubUseDs_gPsych,0.055,interaction,DI,NonAged/Substance Use*Psychiatric
+DI_NONAGED_HCC6,0.043,disease,DI,NonAged/Opportunistic Infections
+DI_NONAGED_HCC34,0.128,disease,DI,NonAged/Chronic Pancreatitis
+DI_NONAGED_HCC46,0.220,disease,DI,NonAged/Severe Hematological Disorders
+DI_NONAGED_HCC110,0.657,disease,DI,NonAged/Cystic Fibrosis
+DI_NONAGED_HCC176,0.041,disease,DI,NonAged/Complications of Specified Implanted Device or Graft
+DNE_ND_PBD_NORIGDIS_NEF0_34,0.760,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 0-34
+DNE_ND_PBD_NORIGDIS_NEF35_44,0.747,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 35-44
+DNE_ND_PBD_NORIGDIS_NEF45_54,0.741,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 45-54
+DNE_ND_PBD_NORIGDIS_NEF55_59,0.728,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 55-59
+DNE_ND_PBD_NORIGDIS_NEF60_64,0.768,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 60-64
+DNE_ND_PBD_NORIGDIS_NEF65_69,0.936,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 65-69
+DNE_ND_PBD_NORIGDIS_NEF70_74,0.963,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 70-74
+DNE_ND_PBD_NORIGDIS_NEF75_79,0.963,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 75-79
+DNE_ND_PBD_NORIGDIS_NEF80_84,0.991,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 80-84
+DNE_ND_PBD_NORIGDIS_NEF85_GT,0.963,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 85+
+DNE_ND_PBD_NORIGDIS_NEM0_34,0.720,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 0-34
+DNE_ND_PBD_NORIGDIS_NEM35_44,0.708,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 35-44
+DNE_ND_PBD_NORIGDIS_NEM45_54,0.690,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 45-54
+DNE_ND_PBD_NORIGDIS_NEM55_59,0.718,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 55-59
+DNE_ND_PBD_NORIGDIS_NEM60_64,0.755,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 60-64
+DNE_ND_PBD_NORIGDIS_NEM65_69,0.891,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 65-69
+DNE_ND_PBD_NORIGDIS_NEM70_74,0.868,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 70-74
+DNE_ND_PBD_NORIGDIS_NEM75_79,0.937,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 75-79
+DNE_ND_PBD_NORIGDIS_NEM80_84,0.982,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 80-84
+DNE_ND_PBD_NORIGDIS_NEM85_GT,0.978,interaction,DNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 85+
+DNE_FBD_NORIGDIS_NEF0_34,0.981,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 0-34
+DNE_FBD_NORIGDIS_NEF35_44,0.944,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 35-44
+DNE_FBD_NORIGDIS_NEF45_54,0.869,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 45-54
+DNE_FBD_NORIGDIS_NEF55_59,0.892,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 55-59
+DNE_FBD_NORIGDIS_NEF60_64,0.892,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 60-64
+DNE_FBD_NORIGDIS_NEF65_69,1.094,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 65-69
+DNE_FBD_NORIGDIS_NEF70_74,1.102,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 70-74
+DNE_FBD_NORIGDIS_NEF75_79,1.142,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 75-79
+DNE_FBD_NORIGDIS_NEF80_84,1.189,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 80-84
+DNE_FBD_NORIGDIS_NEF85_GT,1.154,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Female 85+
+DNE_FBD_NORIGDIS_NEM0_34,0.883,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 0-34
+DNE_FBD_NORIGDIS_NEM35_44,0.883,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 35-44
+DNE_FBD_NORIGDIS_NEM45_54,0.827,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 45-54
+DNE_FBD_NORIGDIS_NEM55_59,0.862,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 55-59
+DNE_FBD_NORIGDIS_NEM60_64,0.881,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 60-64
+DNE_FBD_NORIGDIS_NEM65_69,1.121,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 65-69
+DNE_FBD_NORIGDIS_NEM70_74,1.082,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 70-74
+DNE_FBD_NORIGDIS_NEM75_79,1.171,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 75-79
+DNE_FBD_NORIGDIS_NEM80_84,1.181,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 80-84
+DNE_FBD_NORIGDIS_NEM85_GT,1.181,interaction,DNE,Full Benefit Dual -- Not Originally Disabled Male 85+
+DNE_ND_PBD_ORIGDIS_NEF0_34,0.938,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 0-34
+DNE_ND_PBD_ORIGDIS_NEF35_44,0.938,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 35-44
+DNE_ND_PBD_ORIGDIS_NEF45_54,0.938,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 45-54
+DNE_ND_PBD_ORIGDIS_NEF55_59,0.938,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 55-59
+DNE_ND_PBD_ORIGDIS_NEF60_64,0.938,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 60-64
+DNE_ND_PBD_ORIGDIS_NEF65_69,1.049,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 65-69
+DNE_ND_PBD_ORIGDIS_NEF70_74,1.036,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 70-74
+DNE_ND_PBD_ORIGDIS_NEF75_79,1.018,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 75-79
+DNE_ND_PBD_ORIGDIS_NEF80_84,1.018,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 80-84
+DNE_ND_PBD_ORIGDIS_NEF85_GT,1.018,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Female 85+
+DNE_ND_PBD_ORIGDIS_NEM0_34,0.944,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 0-34
+DNE_ND_PBD_ORIGDIS_NEM35_44,0.944,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 35-44
+DNE_ND_PBD_ORIGDIS_NEM45_54,0.851,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 45-54
+DNE_ND_PBD_ORIGDIS_NEM55_59,0.847,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 55-59
+DNE_ND_PBD_ORIGDIS_NEM60_64,0.859,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 60-64
+DNE_ND_PBD_ORIGDIS_NEM65_69,0.921,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 65-69
+DNE_ND_PBD_ORIGDIS_NEM70_74,0.902,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 70-74
+DNE_ND_PBD_ORIGDIS_NEM75_79,1.004,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 75-79
+DNE_ND_PBD_ORIGDIS_NEM80_84,1.004,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 80-84
+DNE_ND_PBD_ORIGDIS_NEM85_GT,1.004,interaction,DNE,NonDual or Partial Benefit Dual and Originally Disabled Male 85+
+DNE_FBD_ORIGDIS_NEF0_34,1.207,interaction,DNE,Full Benefit Dual and Originally Disabled Female 0-34
+DNE_FBD_ORIGDIS_NEF35_44,1.207,interaction,DNE,Full Benefit Dual and Originally Disabled Female 35-44
+DNE_FBD_ORIGDIS_NEF45_54,1.118,interaction,DNE,Full Benefit Dual and Originally Disabled Female 45-54
+DNE_FBD_ORIGDIS_NEF55_59,1.118,interaction,DNE,Full Benefit Dual and Originally Disabled Female 55-59
+DNE_FBD_ORIGDIS_NEF60_64,1.118,interaction,DNE,Full Benefit Dual and Originally Disabled Female 60-64
+DNE_FBD_ORIGDIS_NEF65_69,1.217,interaction,DNE,Full Benefit Dual and Originally Disabled Female 65-69
+DNE_FBD_ORIGDIS_NEF70_74,1.196,interaction,DNE,Full Benefit Dual and Originally Disabled Female 70-74
+DNE_FBD_ORIGDIS_NEF75_79,1.196,interaction,DNE,Full Benefit Dual and Originally Disabled Female 75-79
+DNE_FBD_ORIGDIS_NEF80_84,1.196,interaction,DNE,Full Benefit Dual and Originally Disabled Female 80-84
+DNE_FBD_ORIGDIS_NEF85_GT,1.196,interaction,DNE,Full Benefit Dual and Originally Disabled Female 85+
+DNE_FBD_ORIGDIS_NEM0_34,1.074,interaction,DNE,Full Benefit Dual and Originally Disabled Male 0-34
+DNE_FBD_ORIGDIS_NEM35_44,1.074,interaction,DNE,Full Benefit Dual and Originally Disabled Male 35-44
+DNE_FBD_ORIGDIS_NEM45_54,1.074,interaction,DNE,Full Benefit Dual and Originally Disabled Male 45-54
+DNE_FBD_ORIGDIS_NEM55_59,1.096,interaction,DNE,Full Benefit Dual and Originally Disabled Male 55-59
+DNE_FBD_ORIGDIS_NEM60_64,1.126,interaction,DNE,Full Benefit Dual and Originally Disabled Male 60-64
+DNE_FBD_ORIGDIS_NEM65_69,1.258,interaction,DNE,Full Benefit Dual and Originally Disabled Male 65-69
+DNE_FBD_ORIGDIS_NEM70_74,1.258,interaction,DNE,Full Benefit Dual and Originally Disabled Male 70-74
+DNE_FBD_ORIGDIS_NEM75_79,1.258,interaction,DNE,Full Benefit Dual and Originally Disabled Male 75-79
+DNE_FBD_ORIGDIS_NEM80_84,1.258,interaction,DNE,Full Benefit Dual and Originally Disabled Male 80-84
+DNE_FBD_ORIGDIS_NEM85_GT,1.258,interaction,DNE,Full Benefit Dual and Originally Disabled Male 85+
+GNPA_F65_69,0.301,demographic,GNPA,Female 65-69
+GNPA_F70_74,0.359,demographic,GNPA,Female 70-74
+GNPA_F75_79,0.420,demographic,GNPA,Female 75-79
+GNPA_F80_84,0.474,demographic,GNPA,Female 80-84
+GNPA_F85_89,0.570,demographic,GNPA,Female 85-89
+GNPA_F90_94,0.678,demographic,GNPA,Female 90-94
+GNPA_F95_GT,0.686,demographic,GNPA,Female 95+
+GNPA_M65_69,0.303,demographic,GNPA,Male 65-69
+GNPA_M70_74,0.358,demographic,GNPA,Male 70-74
+GNPA_M75_79,0.451,demographic,GNPA,Male 75-79
+GNPA_M80_84,0.512,demographic,GNPA,Male 80-84
+GNPA_M85_89,0.599,demographic,GNPA,Male 85-89
+GNPA_M90_94,0.730,demographic,GNPA,Male 90-94
+GNPA_M95_GT,0.825,demographic,GNPA,Male 95+
+GNPA_OriginallyDisabled_Female,0.219,demographic,GNPA,Originally Disabled Female
+GNPA_OriginallyDisabled_Male,0.125,demographic,GNPA,Originally Disabled Male
+GNPA_HCC1,0.292,disease,GNPA,HIV/AIDS
+GNPA_HCC2,0.324,disease,GNPA,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+GNPA_HCC6,0.364,disease,GNPA,Opportunistic Infections
+GNPA_HCC8,3.057,disease,GNPA,Metastatic Cancer and Acute Leukemia
+GNPA_HCC9,1.226,disease,GNPA,Lung and Other Severe Cancers
+GNPA_HCC10,0.608,disease,GNPA,Lymphoma and Other Cancers
+GNPA_HCC11,0.312,disease,GNPA,Colorectal/Bladder/and Other Cancers
+GNPA_HCC12,0.162,disease,GNPA,Breast/Prostate/and Other Cancers and Tumors
+GNPA_HCC17,0.219,disease,GNPA,Diabetes with Acute Complications
+GNPA_HCC18,0.219,disease,GNPA,Diabetes with Chronic Complications
+GNPA_HCC19,0.073,disease,GNPA,Diabetes without Complication
+GNPA_HCC21,0.549,disease,GNPA,Protein-Calorie Malnutrition
+GNPA_HCC22,0.171,disease,GNPA,Morbid Obesity
+GNPA_HCC23,0.217,disease,GNPA,Other Significant Endocrine and Metabolic Disorders
+GNPA_HCC27,0.886,disease,GNPA,End-Stage Liver Disease
+GNPA_HCC28,0.340,disease,GNPA,Cirrhosis of Liver
+GNPA_HCC29,0.146,disease,GNPA,Chronic Hepatitis
+GNPA_HCC33,0.250,disease,GNPA,Intestinal Obstruction/Perforation
+GNPA_HCC34,0.318,disease,GNPA,Chronic Pancreatitis
+GNPA_HCC35,0.350,disease,GNPA,Inflammatory Bowel Disease
+GNPA_HCC39,0.431,disease,GNPA,Bone/Joint/Muscle Infections/Necrosis
+GNPA_HCC40,0.414,disease,GNPA,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+GNPA_HCC46,1.346,disease,GNPA,Severe Hematological Disorders
+GNPA_HCC47,0.640,disease,GNPA,Disorders of Immunity
+GNPA_HCC48,0.192,disease,GNPA,Coagulation Defects and Other Specified Hematological Disorders
+GNPA_HCC51,0.314,disease,GNPA,Dementia With Complications
+GNPA_HCC52,0.314,disease,GNPA,Dementia Without Complication
+GNPA_HCC54,0.274,disease,GNPA,Substance Use with Psychotic Complications
+GNPA_HCC55,0.274,disease,GNPA,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+GNPA_HCC56,0.274,disease,GNPA,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+GNPA_HCC57,0.507,disease,GNPA,Schizophrenia
+GNPA_HCC58,0.507,disease,GNPA,Reactive and Unspecified Psychosis
+GNPA_HCC59,0.225,disease,GNPA,Major Depressive/Bipolar/and Paranoid Disorders
+GNPA_HCC60,0.225,disease,GNPA,Personality Disorders
+GNPA_HCC70,1.126,disease,GNPA,Quadriplegia
+GNPA_HCC71,0.925,disease,GNPA,Paraplegia
+GNPA_HCC72,0.495,disease,GNPA,Spinal Cord Disorders/Injuries
+GNPA_HCC73,1.256,disease,GNPA,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+GNPA_HCC74,0.226,disease,GNPA,Cerebral Palsy
+GNPA_HCC75,0.573,disease,GNPA,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+GNPA_HCC76,0.471,disease,GNPA,Muscular Dystrophy
+GNPA_HCC77,0.621,disease,GNPA,Multiple Sclerosis
+GNPA_HCC78,0.588,disease,GNPA,Parkinsons and Huntingtons Diseases
+GNPA_HCC79,0.249,disease,GNPA,Seizure Disorders and Convulsions
+GNPA_HCC80,0.542,disease,GNPA,Coma/Brain Compression/Anoxic Damage
+GNPA_HCC82,0.830,disease,GNPA,Respirator Dependence/Tracheostomy Status
+GNPA_HCC83,0.449,disease,GNPA,Respiratory Arrest
+GNPA_HCC84,0.293,disease,GNPA,Cardio-Respiratory Failure and Shock
+GNPA_HCC85,0.251,disease,GNPA,Congestive Heart Failure
+GNPA_HCC86,0.219,disease,GNPA,Acute Myocardial Infarction
+GNPA_HCC87,0.209,disease,GNPA,Unstable Angina and Other Acute Ischemic Heart Disease
+GNPA_HCC88,0.136,disease,GNPA,Angina Pectoris
+GNPA_HCC96,0.252,disease,GNPA,Specified Heart Arrhythmias
+GNPA_HCC99,0.219,disease,GNPA,Intracranial Hemorrhage
+GNPA_HCC100,0.219,disease,GNPA,Ischemic or Unspecified Stroke
+GNPA_HCC103,0.388,disease,GNPA,Hemiplegia/Hemiparesis
+GNPA_HCC104,0.311,disease,GNPA,Monoplegia/Other Paralytic Syndromes
+GNPA_HCC106,1.344,disease,GNPA,Atherosclerosis of the Extremities with Ulceration or Gangrene
+GNPA_HCC107,0.348,disease,GNPA,Vascular Disease with Complications
+GNPA_HCC108,0.257,disease,GNPA,Vascular Disease
+GNPA_HCC110,0.919,disease,GNPA,Cystic Fibrosis
+GNPA_HCC111,0.291,disease,GNPA,Chronic Obstructive Pulmonary Disease
+GNPA_HCC112,0.201,disease,GNPA,Fibrosis of Lung and Other Chronic Lung Disorders
+GNPA_HCC114,0.486,disease,GNPA,Aspiration and Specified Bacterial Pneumonias
+GNPA_HCC115,0.205,disease,GNPA,Pneumococcal Pneumonia/Empyema/Lung Abscess
+GNPA_HCC122,0.321,disease,GNPA,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+GNPA_HCC124,0.601,disease,GNPA,Exudative Macular Degeneration
+GNPA_HCC134,0.000,disease,GNPA,Dialysis Status
+GNPA_HCC135,0.000,disease,GNPA,Acute Renal Failure
+GNPA_HCC136,0.000,disease,GNPA,Chronic Kidney Disease/Stage 5
+GNPA_HCC137,0.000,disease,GNPA,Chronic Kidney Disease/Severe (Stage 4)
+GNPA_HCC138,0.000,disease,GNPA,Chronic Kidney Disease/Moderate (Stage 3)
+GNPA_HCC157,1.833,disease,GNPA,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+GNPA_HCC158,1.038,disease,GNPA,Pressure Ulcer of Skin with Full Thickness Skin Loss
+GNPA_HCC159,0.795,disease,GNPA,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+GNPA_HCC161,0.582,disease,GNPA,Chronic Ulcer of Skin/Except Pressure
+GNPA_HCC162,0.503,disease,GNPA,Severe Skin Burn or Condition
+GNPA_HCC166,0.542,disease,GNPA,Severe Head Injury
+GNPA_HCC167,0.162,disease,GNPA,Major Head Injury
+GNPA_HCC169,0.475,disease,GNPA,Vertebral Fractures without Spinal Cord Injury
+GNPA_HCC170,0.358,disease,GNPA,Hip Fracture/Dislocation
+GNPA_HCC173,0.160,disease,GNPA,Traumatic Amputations and Complications
+GNPA_HCC176,0.610,disease,GNPA,Complications of Specified Implanted Device or Graft
+GNPA_HCC186,0.000,disease,GNPA,Major Organ Transplant or Replacement Status
+GNPA_HCC188,0.558,disease,GNPA,Artificial Openings for Feeding or Elimination
+GNPA_HCC189,0.520,disease,GNPA,Amputation Status/Lower Limb/Amputation Complications
+GNPA_HCC47_gCancer,0.780,interaction,GNPA,Immune Disorders*Cancer
+GNPA_DIABETES_CHF,0.132,interaction,GNPA,Congestive Heart Failure*Diabetes
+GNPA_CHF_gCopdCF,0.134,interaction,GNPA,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+GNPA_HCC85_gRenal_V24,0.000,interaction,GNPA,Congestive Heart Failure*Renal
+GNPA_gCopdCF_CARD_RESP_FAIL,0.333,interaction,GNPA,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+GNPA_HCC85_HCC96,0.109,disease,GNPA,Congestive Heart Failure*Specified Heart Arrhythmias
+FGC_GE65_DUR4_9_ND_PBD,2.529,demographic,FGC,Aged/with duration since transplant of 4-9 months/NonDual and Partial Benefit Dual
+FGC_GE65_DUR10PL_ND_PBD,0.905,demographic,FGC,Aged/with duration since transplant of 10 months or more/NonDual and Partial Benefit Dual
+FGC_PBD_GE65_flag,0.162,demographic,FGC,Partial Benefit Dual/Aged
+GNPN_F0_34,0.198,demographic,GNPN,Female 0-34
+GNPN_F35_44,0.250,demographic,GNPN,Female 35-44
+GNPN_F45_54,0.292,demographic,GNPN,Female 45-54
+GNPN_F55_59,0.329,demographic,GNPN,Female 55-59
+GNPN_F60_64,0.373,demographic,GNPN,Female 60-64
+GNPN_M0_34,0.102,demographic,GNPN,Male 0-34
+GNPN_M35_44,0.155,demographic,GNPN,Male 35-44
+GNPN_M45_54,0.197,demographic,GNPN,Male 45-54
+GNPN_M55_59,0.249,demographic,GNPN,Male 55-59
+GNPN_M60_64,0.298,demographic,GNPN,Male 60-64
+GNPN_HCC1,0.331,disease,GNPN,HIV/AIDS
+GNPN_HCC2,0.411,disease,GNPN,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+GNPN_HCC6,0.688,disease,GNPN,Opportunistic Infections
+GNPN_HCC8,3.058,disease,GNPN,Metastatic Cancer and Acute Leukemia
+GNPN_HCC9,1.075,disease,GNPN,Lung and Other Severe Cancers
+GNPN_HCC10,0.595,disease,GNPN,Lymphoma and Other Cancers
+GNPN_HCC11,0.257,disease,GNPN,Colorectal/Bladder/and Other Cancers
+GNPN_HCC12,0.189,disease,GNPN,Breast/Prostate/and Other Cancers and Tumors
+GNPN_HCC17,0.241,disease,GNPN,Diabetes with Acute Complications
+GNPN_HCC18,0.241,disease,GNPN,Diabetes with Chronic Complications
+GNPN_HCC19,0.083,disease,GNPN,Diabetes without Complication
+GNPN_HCC21,0.870,disease,GNPN,Protein-Calorie Malnutrition
+GNPN_HCC22,0.141,disease,GNPN,Morbid Obesity
+GNPN_HCC23,0.390,disease,GNPN,Other Significant Endocrine and Metabolic Disorders
+GNPN_HCC27,0.920,disease,GNPN,End-Stage Liver Disease
+GNPN_HCC28,0.342,disease,GNPN,Cirrhosis of Liver
+GNPN_HCC29,0.342,disease,GNPN,Chronic Hepatitis
+GNPN_HCC33,0.474,disease,GNPN,Intestinal Obstruction/Perforation
+GNPN_HCC34,0.543,disease,GNPN,Chronic Pancreatitis
+GNPN_HCC35,0.469,disease,GNPN,Inflammatory Bowel Disease
+GNPN_HCC39,0.440,disease,GNPN,Bone/Joint/Muscle Infections/Necrosis
+GNPN_HCC40,0.353,disease,GNPN,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+GNPN_HCC46,4.064,disease,GNPN,Severe Hematological Disorders
+GNPN_HCC47,0.803,disease,GNPN,Disorders of Immunity
+GNPN_HCC48,0.319,disease,GNPN,Coagulation Defects and Other Specified Hematological Disorders
+GNPN_HCC51,0.282,disease,GNPN,Dementia With Complications
+GNPN_HCC52,0.282,disease,GNPN,Dementia Without Complication
+GNPN_HCC54,0.521,disease,GNPN,Substance Use with Psychotic Complications
+GNPN_HCC55,0.256,disease,GNPN,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+GNPN_HCC56,0.169,disease,GNPN,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+GNPN_HCC57,0.372,disease,GNPN,Schizophrenia
+GNPN_HCC58,0.295,disease,GNPN,Reactive and Unspecified Psychosis
+GNPN_HCC59,0.145,disease,GNPN,Major Depressive/Bipolar/and Paranoid Disorders
+GNPN_HCC60,0.145,disease,GNPN,Personality Disorders
+GNPN_HCC70,0.906,disease,GNPN,Quadriplegia
+GNPN_HCC71,0.605,disease,GNPN,Paraplegia
+GNPN_HCC72,0.456,disease,GNPN,Spinal Cord Disorders/Injuries
+GNPN_HCC73,1.400,disease,GNPN,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+GNPN_HCC74,0.094,disease,GNPN,Cerebral Palsy
+GNPN_HCC75,0.599,disease,GNPN,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+GNPN_HCC76,0.745,disease,GNPN,Muscular Dystrophy
+GNPN_HCC77,0.876,disease,GNPN,Multiple Sclerosis
+GNPN_HCC78,0.457,disease,GNPN,Parkinsons and Huntingtons Diseases
+GNPN_HCC79,0.195,disease,GNPN,Seizure Disorders and Convulsions
+GNPN_HCC80,0.277,disease,GNPN,Coma/Brain Compression/Anoxic Damage
+GNPN_HCC82,0.946,disease,GNPN,Respirator Dependence/Tracheostomy Status
+GNPN_HCC83,0.496,disease,GNPN,Respiratory Arrest
+GNPN_HCC84,0.496,disease,GNPN,Cardio-Respiratory Failure and Shock
+GNPN_HCC85,0.273,disease,GNPN,Congestive Heart Failure
+GNPN_HCC86,0.252,disease,GNPN,Acute Myocardial Infarction
+GNPN_HCC87,0.241,disease,GNPN,Unstable Angina and Other Acute Ischemic Heart Disease
+GNPN_HCC88,0.135,disease,GNPN,Angina Pectoris
+GNPN_HCC96,0.269,disease,GNPN,Specified Heart Arrhythmias
+GNPN_HCC99,0.194,disease,GNPN,Intracranial Hemorrhage
+GNPN_HCC100,0.181,disease,GNPN,Ischemic or Unspecified Stroke
+GNPN_HCC103,0.331,disease,GNPN,Hemiplegia/Hemiparesis
+GNPN_HCC104,0.162,disease,GNPN,Monoplegia/Other Paralytic Syndromes
+GNPN_HCC106,1.397,disease,GNPN,Atherosclerosis of the Extremities with Ulceration or Gangrene
+GNPN_HCC107,0.436,disease,GNPN,Vascular Disease with Complications
+GNPN_HCC108,0.273,disease,GNPN,Vascular Disease
+GNPN_HCC110,2.244,disease,GNPN,Cystic Fibrosis
+GNPN_HCC111,0.187,disease,GNPN,Chronic Obstructive Pulmonary Disease
+GNPN_HCC112,0.187,disease,GNPN,Fibrosis of Lung and Other Chronic Lung Disorders
+GNPN_HCC114,0.428,disease,GNPN,Aspiration and Specified Bacterial Pneumonias
+GNPN_HCC115,0.154,disease,GNPN,Pneumococcal Pneumonia/Empyema/Lung Abscess
+GNPN_HCC122,0.333,disease,GNPN,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+GNPN_HCC124,0.379,disease,GNPN,Exudative Macular Degeneration
+GNPN_HCC134,0.000,disease,GNPN,Dialysis Status
+GNPN_HCC135,0.000,disease,GNPN,Acute Renal Failure
+GNPN_HCC136,0.000,disease,GNPN,Chronic Kidney Disease/Stage 5
+GNPN_HCC137,0.000,disease,GNPN,Chronic Kidney Disease/Severe (Stage 4)
+GNPN_HCC138,0.000,disease,GNPN,Chronic Kidney Disease/Moderate (Stage 3)
+GNPN_HCC157,1.970,disease,GNPN,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+GNPN_HCC158,1.076,disease,GNPN,Pressure Ulcer of Skin with Full Thickness Skin Loss
+GNPN_HCC159,0.946,disease,GNPN,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+GNPN_HCC161,0.650,disease,GNPN,Chronic Ulcer of Skin/Except Pressure
+GNPN_HCC162,0.142,disease,GNPN,Severe Skin Burn or Condition
+GNPN_HCC166,0.277,disease,GNPN,Severe Head Injury
+GNPN_HCC167,0.100,disease,GNPN,Major Head Injury
+GNPN_HCC169,0.456,disease,GNPN,Vertebral Fractures without Spinal Cord Injury
+GNPN_HCC170,0.407,disease,GNPN,Hip Fracture/Dislocation
+GNPN_HCC173,0.082,disease,GNPN,Traumatic Amputations and Complications
+GNPN_HCC176,0.900,disease,GNPN,Complications of Specified Implanted Device or Graft
+GNPN_HCC186,0.000,disease,GNPN,Major Organ Transplant or Replacement Status
+GNPN_HCC188,0.772,disease,GNPN,Artificial Openings for Feeding or Elimination
+GNPN_HCC189,0.525,disease,GNPN,Amputation Status/Lower Limb/Amputation Complications
+GNPN_HCC47_gCancer,0.654,interaction,GNPN,Immune Disorders*Cancer
+GNPN_DIABETES_CHF,0.112,interaction,GNPN,Congestive Heart Failure*Diabetes
+GNPN_CHF_gCopdCF,0.154,interaction,GNPN,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+GNPN_HCC85_gRenal_V24,0.000,interaction,GNPN,Congestive Heart Failure*Renal
+GNPN_gCopdCF_CARD_RESP_FAIL,0.326,interaction,GNPN,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+GNPN_HCC85_HCC96,0.308,disease,GNPN,Congestive Heart Failure*Specified Heart Arrhythmias
+GNPN_gSubUseDs_gPsych_V24,0.122,interaction,GNPN,Substance Use Disorder*Psychiatric
+FGC_LT65_DUR4_9_ND_PBD,1.737,demographic,FGC,NonAged/with duration since transplant of 4-9 months/NonDual and Partial Benefit Dual
+FGC_LT65_DUR10PL_ND_PBD,0.335,demographic,FGC,NonAged/with duration since transplant of 10 months or more/NonDual and Partial Benefit Dual
+FGC_PBD_LT65_flag,0.141,demographic,FGC,Partial Benefit Dual/NonAged
+GFA_F65_69,0.402,demographic,GFA,Female 65-69
+GFA_F70_74,0.464,demographic,GFA,Female 70-74
+GFA_F75_79,0.545,demographic,GFA,Female 75-79
+GFA_F80_84,0.608,demographic,GFA,Female 80-84
+GFA_F85_89,0.714,demographic,GFA,Female 85-89
+GFA_F90_94,0.803,demographic,GFA,Female 90-94
+GFA_F95_GT,0.804,demographic,GFA,Female 95+
+GFA_M65_69,0.486,demographic,GFA,Male 65-69
+GFA_M70_74,0.570,demographic,GFA,Male 70-74
+GFA_M75_79,0.646,demographic,GFA,Male 75-79
+GFA_M80_84,0.714,demographic,GFA,Male 80-84
+GFA_M85_89,0.825,demographic,GFA,Male 85-89
+GFA_M90_94,0.906,demographic,GFA,Male 90-94
+GFA_M95_GT,0.965,demographic,GFA,Male 95+
+GFA_OriginallyDisabled_Female,0.143,demographic,GFA,Originally Disabled Female
+GFA_OriginallyDisabled_Male,0.136,demographic,GFA,Originally Disabled Male
+GFA_HCC1,0.381,disease,GFA,HIV/AIDS
+GFA_HCC2,0.396,disease,GFA,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+GFA_HCC6,0.530,disease,GFA,Opportunistic Infections
+GFA_HCC8,2.932,disease,GFA,Metastatic Cancer and Acute Leukemia
+GFA_HCC9,1.179,disease,GFA,Lung and Other Severe Cancers
+GFA_HCC10,0.628,disease,GFA,Lymphoma and Other Cancers
+GFA_HCC11,0.325,disease,GFA,Colorectal/Bladder/and Other Cancers
+GFA_HCC12,0.170,disease,GFA,Breast/Prostate/and Other Cancers and Tumors
+GFA_HCC17,0.233,disease,GFA,Diabetes with Acute Complications
+GFA_HCC18,0.233,disease,GFA,Diabetes with Chronic Complications
+GFA_HCC19,0.051,disease,GFA,Diabetes without Complication
+GFA_HCC21,0.712,disease,GFA,Protein-Calorie Malnutrition
+GFA_HCC22,0.292,disease,GFA,Morbid Obesity
+GFA_HCC23,0.246,disease,GFA,Other Significant Endocrine and Metabolic Disorders
+GFA_HCC27,0.985,disease,GFA,End-Stage Liver Disease
+GFA_HCC28,0.414,disease,GFA,Cirrhosis of Liver
+GFA_HCC29,0.059,disease,GFA,Chronic Hepatitis
+GFA_HCC33,0.254,disease,GFA,Intestinal Obstruction/Perforation
+GFA_HCC34,0.419,disease,GFA,Chronic Pancreatitis
+GFA_HCC35,0.286,disease,GFA,Inflammatory Bowel Disease
+GFA_HCC39,0.578,disease,GFA,Bone/Joint/Muscle Infections/Necrosis
+GFA_HCC40,0.313,disease,GFA,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+GFA_HCC46,1.361,disease,GFA,Severe Hematological Disorders
+GFA_HCC47,0.539,disease,GFA,Disorders of Immunity
+GFA_HCC48,0.240,disease,GFA,Coagulation Defects and Other Specified Hematological Disorders
+GFA_HCC51,0.399,disease,GFA,Dementia With Complications
+GFA_HCC52,0.399,disease,GFA,Dementia Without Complication
+GFA_HCC54,0.416,disease,GFA,Substance Use with Psychotic Complications
+GFA_HCC55,0.416,disease,GFA,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+GFA_HCC56,0.416,disease,GFA,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+GFA_HCC57,0.572,disease,GFA,Schizophrenia
+GFA_HCC58,0.572,disease,GFA,Reactive and Unspecified Psychosis
+GFA_HCC59,0.259,disease,GFA,Major Depressive/Bipolar/and Paranoid Disorders
+GFA_HCC60,0.131,disease,GFA,Personality Disorders
+GFA_HCC70,0.964,disease,GFA,Quadriplegia
+GFA_HCC71,0.786,disease,GFA,Paraplegia
+GFA_HCC72,0.523,disease,GFA,Spinal Cord Disorders/Injuries
+GFA_HCC73,1.570,disease,GFA,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+GFA_HCC74,0.000,disease,GFA,Cerebral Palsy
+GFA_HCC75,0.430,disease,GFA,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+GFA_HCC76,0.381,disease,GFA,Muscular Dystrophy
+GFA_HCC77,0.749,disease,GFA,Multiple Sclerosis
+GFA_HCC78,0.608,disease,GFA,Parkinsons and Huntingtons Diseases
+GFA_HCC79,0.223,disease,GFA,Seizure Disorders and Convulsions
+GFA_HCC80,0.679,disease,GFA,Coma/Brain Compression/Anoxic Damage
+GFA_HCC82,1.874,disease,GFA,Respirator Dependence/Tracheostomy Status
+GFA_HCC83,0.843,disease,GFA,Respiratory Arrest
+GFA_HCC84,0.450,disease,GFA,Cardio-Respiratory Failure and Shock
+GFA_HCC85,0.257,disease,GFA,Congestive Heart Failure
+GFA_HCC86,0.419,disease,GFA,Acute Myocardial Infarction
+GFA_HCC87,0.276,disease,GFA,Unstable Angina and Other Acute Ischemic Heart Disease
+GFA_HCC88,0.071,disease,GFA,Angina Pectoris
+GFA_HCC96,0.346,disease,GFA,Specified Heart Arrhythmias
+GFA_HCC99,0.355,disease,GFA,Intracranial Hemorrhage
+GFA_HCC100,0.355,disease,GFA,Ischemic or Unspecified Stroke
+GFA_HCC103,0.414,disease,GFA,Hemiplegia/Hemiparesis
+GFA_HCC104,0.274,disease,GFA,Monoplegia/Other Paralytic Syndromes
+GFA_HCC106,1.740,disease,GFA,Atherosclerosis of the Extremities with Ulceration or Gangrene
+GFA_HCC107,0.586,disease,GFA,Vascular Disease with Complications
+GFA_HCC108,0.287,disease,GFA,Vascular Disease
+GFA_HCC110,1.348,disease,GFA,Cystic Fibrosis
+GFA_HCC111,0.344,disease,GFA,Chronic Obstructive Pulmonary Disease
+GFA_HCC112,0.147,disease,GFA,Fibrosis of Lung and Other Chronic Lung Disorders
+GFA_HCC114,0.582,disease,GFA,Aspiration and Specified Bacterial Pneumonias
+GFA_HCC115,0.248,disease,GFA,Pneumococcal Pneumonia/Empyema/Lung Abscess
+GFA_HCC122,0.357,disease,GFA,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+GFA_HCC124,0.383,disease,GFA,Exudative Macular Degeneration
+GFA_HCC134,0.000,disease,GFA,Dialysis Status
+GFA_HCC135,0.000,disease,GFA,Acute Renal Failure
+GFA_HCC136,0.000,disease,GFA,Chronic Kidney Disease/Stage 5
+GFA_HCC137,0.000,disease,GFA,Chronic Kidney Disease/Severe (Stage 4)
+GFA_HCC138,0.000,disease,GFA,Chronic Kidney Disease/Moderate (Stage 3)
+GFA_HCC157,2.333,disease,GFA,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+GFA_HCC158,1.266,disease,GFA,Pressure Ulcer of Skin with Full Thickness Skin Loss
+GFA_HCC159,0.940,disease,GFA,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+GFA_HCC161,0.782,disease,GFA,Chronic Ulcer of Skin/Except Pressure
+GFA_HCC162,1.053,disease,GFA,Severe Skin Burn or Condition
+GFA_HCC166,1.053,disease,GFA,Severe Head Injury
+GFA_HCC167,0.239,disease,GFA,Major Head Injury
+GFA_HCC169,0.523,disease,GFA,Vertebral Fractures without Spinal Cord Injury
+GFA_HCC170,0.425,disease,GFA,Hip Fracture/Dislocation
+GFA_HCC173,0.341,disease,GFA,Traumatic Amputations and Complications
+GFA_HCC176,0.735,disease,GFA,Complications of Specified Implanted Device or Graft
+GFA_HCC186,0.000,disease,GFA,Major Organ Transplant or Replacement Status
+GFA_HCC188,0.728,disease,GFA,Artificial Openings for Feeding or Elimination
+GFA_HCC189,0.729,disease,GFA,Amputation Status/Lower Limb/Amputation Complications
+GFA_HCC47_gCancer,0.841,interaction,GFA,Immune Disorders*Cancer
+GFA_DIABETES_CHF,0.223,interaction,GFA,Congestive Heart Failure*Diabetes
+GFA_CHF_gCopdCF,0.166,interaction,GFA,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+GFA_HCC85_gRenal_V24,0.000,interaction,GFA,Congestive Heart Failure*Renal
+GFA_gCopdCF_CARD_RESP_FAIL,0.430,interaction,GFA,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+GFA_HCC85_HCC96,0.194,disease,GFA,Congestive Heart Failure*Specified Heart Arrhythmias
+FGC_GE65_DUR4_9_FBD,2.605,demographic,FGC,Aged/with duration since transplant of 4-9 months/Full Benefit Dual
+FGC_GE65_DUR10PL_FBD,1.279,demographic,FGC,Aged/with duration since transplant of 10 months or more/Full Benefit Dual
+GFN_F0_34,0.308,demographic,GFN,Female 0-34
+GFN_F35_44,0.291,demographic,GFN,Female 35-44
+GFN_F45_54,0.328,demographic,GFN,Female 45-54
+GFN_F55_59,0.349,demographic,GFN,Female 55-59
+GFN_F60_64,0.423,demographic,GFN,Female 60-64
+GFN_M0_34,0.187,demographic,GFN,Male 0-34
+GFN_M35_44,0.200,demographic,GFN,Male 35-44
+GFN_M45_54,0.257,demographic,GFN,Male 45-54
+GFN_M55_59,0.350,demographic,GFN,Male 55-59
+GFN_M60_64,0.425,demographic,GFN,Male 60-64
+GFN_HCC1,0.319,disease,GFN,HIV/AIDS
+GFN_HCC2,0.532,disease,GFN,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+GFN_HCC6,0.782,disease,GFN,Opportunistic Infections
+GFN_HCC8,3.226,disease,GFN,Metastatic Cancer and Acute Leukemia
+GFN_HCC9,1.089,disease,GFN,Lung and Other Severe Cancers
+GFN_HCC10,0.780,disease,GFN,Lymphoma and Other Cancers
+GFN_HCC11,0.362,disease,GFN,Colorectal/Bladder/and Other Cancers
+GFN_HCC12,0.182,disease,GFN,Breast/Prostate/and Other Cancers and Tumors
+GFN_HCC17,0.296,disease,GFN,Diabetes with Acute Complications
+GFN_HCC18,0.296,disease,GFN,Diabetes with Chronic Complications
+GFN_HCC19,0.102,disease,GFN,Diabetes without Complication
+GFN_HCC21,0.963,disease,GFN,Protein-Calorie Malnutrition
+GFN_HCC22,0.192,disease,GFN,Morbid Obesity
+GFN_HCC23,0.317,disease,GFN,Other Significant Endocrine and Metabolic Disorders
+GFN_HCC27,1.149,disease,GFN,End-Stage Liver Disease
+GFN_HCC28,0.387,disease,GFN,Cirrhosis of Liver
+GFN_HCC29,0.292,disease,GFN,Chronic Hepatitis
+GFN_HCC33,0.458,disease,GFN,Intestinal Obstruction/Perforation
+GFN_HCC34,0.721,disease,GFN,Chronic Pancreatitis
+GFN_HCC35,0.503,disease,GFN,Inflammatory Bowel Disease
+GFN_HCC39,0.537,disease,GFN,Bone/Joint/Muscle Infections/Necrosis
+GFN_HCC40,0.299,disease,GFN,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+GFN_HCC46,3.980,disease,GFN,Severe Hematological Disorders
+GFN_HCC47,0.656,disease,GFN,Disorders of Immunity
+GFN_HCC48,0.358,disease,GFN,Coagulation Defects and Other Specified Hematological Disorders
+GFN_HCC51,0.348,disease,GFN,Dementia With Complications
+GFN_HCC52,0.348,disease,GFN,Dementia Without Complication
+GFN_HCC54,1.071,disease,GFN,Substance Use with Psychotic Complications
+GFN_HCC55,0.355,disease,GFN,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+GFN_HCC56,0.267,disease,GFN,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+GFN_HCC57,0.398,disease,GFN,Schizophrenia
+GFN_HCC58,0.145,disease,GFN,Reactive and Unspecified Psychosis
+GFN_HCC59,0.129,disease,GFN,Major Depressive/Bipolar/and Paranoid Disorders
+GFN_HCC60,0.047,disease,GFN,Personality Disorders
+GFN_HCC70,0.892,disease,GFN,Quadriplegia
+GFN_HCC71,0.760,disease,GFN,Paraplegia
+GFN_HCC72,0.431,disease,GFN,Spinal Cord Disorders/Injuries
+GFN_HCC73,1.644,disease,GFN,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+GFN_HCC74,0.000,disease,GFN,Cerebral Palsy
+GFN_HCC75,0.493,disease,GFN,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+GFN_HCC76,0.842,disease,GFN,Muscular Dystrophy
+GFN_HCC77,1.113,disease,GFN,Multiple Sclerosis
+GFN_HCC78,0.442,disease,GFN,Parkinsons and Huntingtons Diseases
+GFN_HCC79,0.167,disease,GFN,Seizure Disorders and Convulsions
+GFN_HCC80,0.289,disease,GFN,Coma/Brain Compression/Anoxic Damage
+GFN_HCC82,1.476,disease,GFN,Respirator Dependence/Tracheostomy Status
+GFN_HCC83,0.613,disease,GFN,Respiratory Arrest
+GFN_HCC84,0.613,disease,GFN,Cardio-Respiratory Failure and Shock
+GFN_HCC85,0.302,disease,GFN,Congestive Heart Failure
+GFN_HCC86,0.534,disease,GFN,Acute Myocardial Infarction
+GFN_HCC87,0.463,disease,GFN,Unstable Angina and Other Acute Ischemic Heart Disease
+GFN_HCC88,0.152,disease,GFN,Angina Pectoris
+GFN_HCC96,0.291,disease,GFN,Specified Heart Arrhythmias
+GFN_HCC99,0.438,disease,GFN,Intracranial Hemorrhage
+GFN_HCC100,0.302,disease,GFN,Ischemic or Unspecified Stroke
+GFN_HCC103,0.391,disease,GFN,Hemiplegia/Hemiparesis
+GFN_HCC104,0.353,disease,GFN,Monoplegia/Other Paralytic Syndromes
+GFN_HCC106,1.665,disease,GFN,Atherosclerosis of the Extremities with Ulceration or Gangrene
+GFN_HCC107,0.547,disease,GFN,Vascular Disease with Complications
+GFN_HCC108,0.283,disease,GFN,Vascular Disease
+GFN_HCC110,3.090,disease,GFN,Cystic Fibrosis
+GFN_HCC111,0.256,disease,GFN,Chronic Obstructive Pulmonary Disease
+GFN_HCC112,0.256,disease,GFN,Fibrosis of Lung and Other Chronic Lung Disorders
+GFN_HCC114,0.344,disease,GFN,Aspiration and Specified Bacterial Pneumonias
+GFN_HCC115,0.207,disease,GFN,Pneumococcal Pneumonia/Empyema/Lung Abscess
+GFN_HCC122,0.363,disease,GFN,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+GFN_HCC124,0.270,disease,GFN,Exudative Macular Degeneration
+GFN_HCC134,0.000,disease,GFN,Dialysis Status
+GFN_HCC135,0.000,disease,GFN,Acute Renal Failure
+GFN_HCC136,0.000,disease,GFN,Chronic Kidney Disease/Stage 5
+GFN_HCC137,0.000,disease,GFN,Chronic Kidney Disease/Severe (Stage 4)
+GFN_HCC138,0.000,disease,GFN,Chronic Kidney Disease/Moderate (Stage 3)
+GFN_HCC157,2.366,disease,GFN,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+GFN_HCC158,1.141,disease,GFN,Pressure Ulcer of Skin with Full Thickness Skin Loss
+GFN_HCC159,0.894,disease,GFN,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+GFN_HCC161,0.650,disease,GFN,Chronic Ulcer of Skin/Except Pressure
+GFN_HCC162,0.534,disease,GFN,Severe Skin Burn or Condition
+GFN_HCC166,0.289,disease,GFN,Severe Head Injury
+GFN_HCC167,0.107,disease,GFN,Major Head Injury
+GFN_HCC169,0.431,disease,GFN,Vertebral Fractures without Spinal Cord Injury
+GFN_HCC170,0.430,disease,GFN,Hip Fracture/Dislocation
+GFN_HCC173,0.145,disease,GFN,Traumatic Amputations and Complications
+GFN_HCC176,1.017,disease,GFN,Complications of Specified Implanted Device or Graft
+GFN_HCC186,0.000,disease,GFN,Major Organ Transplant or Replacement Status
+GFN_HCC188,0.786,disease,GFN,Artificial Openings for Feeding or Elimination
+GFN_HCC189,0.831,disease,GFN,Amputation Status/Lower Limb/Amputation Complications
+GFN_HCC47_gCancer,0.647,interaction,GFN,Immune Disorders*Cancer
+GFN_DIABETES_CHF,0.159,interaction,GFN,Congestive Heart Failure*Diabetes
+GFN_CHF_gCopdCF,0.209,interaction,GFN,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+GFN_HCC85_gRenal_V24,0.000,interaction,GFN,Congestive Heart Failure*Renal
+GFN_gCopdCF_CARD_RESP_FAIL,0.432,interaction,GFN,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+GFN_HCC85_HCC96,0.467,disease,GFN,Congestive Heart Failure*Specified Heart Arrhythmias
+GFN_gSubUseDs_gPsych_V24,0.205,interaction,GFN,Substance Use Disorder*Psychiatric
+FGC_LT65_DUR4_9_FBD,2.083,demographic,FGC,NonAged/with duration since transplant of 4-9 months/Full Benefit Dual
+FGC_LT65_DUR10PL_FBD,0.648,demographic,FGC,NonAged/with duration since transplant of 10 months or more/Full Benefit Dual
+GI_F0_34,1.174,demographic,GI,Female 0-34
+GI_F35_44,0.995,demographic,GI,Female 35-44
+GI_F45_54,1.199,demographic,GI,Female 45-54
+GI_F55_59,1.129,demographic,GI,Female 55-59
+GI_F60_64,1.067,demographic,GI,Female 60-64
+GI_F65_69,1.273,demographic,GI,Female 65-69
+GI_F70_74,1.202,demographic,GI,Female 70-74
+GI_F75_79,1.046,demographic,GI,Female 75-79
+GI_F80_84,0.935,demographic,GI,Female 80-84
+GI_F85_89,0.822,demographic,GI,Female 85-89
+GI_F90_94,0.700,demographic,GI,Female 90-94
+GI_F95_GT,0.560,demographic,GI,Female 95+
+GI_M0_34,1.043,demographic,GI,Male 0-34
+GI_M35_44,0.893,demographic,GI,Male 35-44
+GI_M45_54,1.148,demographic,GI,Male 45-54
+GI_M55_59,1.143,demographic,GI,Male 55-59
+GI_M60_64,1.074,demographic,GI,Male 60-64
+GI_M65_69,1.323,demographic,GI,Male 65-69
+GI_M70_74,1.265,demographic,GI,Male 70-74
+GI_M75_79,1.353,demographic,GI,Male 75-79
+GI_M80_84,1.268,demographic,GI,Male 80-84
+GI_M85_89,1.157,demographic,GI,Male 85-89
+GI_M90_94,0.973,demographic,GI,Male 90-94
+GI_M95_GT,0.854,demographic,GI,Male 95+
+GI_ORIGDS,0.000,interaction,GI,Originally Disabled
+GI_HCC1,1.302,disease,GI,HIV/AIDS
+GI_HCC2,0.270,disease,GI,Septicemia/Sepsis/Systemic Inflammatory Response Syndrome/Shock
+GI_HCC6,0.571,disease,GI,Opportunistic Infections
+GI_HCC8,1.571,disease,GI,Metastatic Cancer and Acute Leukemia
+GI_HCC9,0.770,disease,GI,Lung and Other Severe Cancers
+GI_HCC10,0.467,disease,GI,Lymphoma and Other Cancers
+GI_HCC11,0.346,disease,GI,Colorectal/Bladder/and Other Cancers
+GI_HCC12,0.219,disease,GI,Breast/Prostate/and Other Cancers and Tumors
+GI_HCC17,0.359,disease,GI,Diabetes with Acute Complications
+GI_HCC18,0.359,disease,GI,Diabetes with Chronic Complications
+GI_HCC19,0.128,disease,GI,Diabetes without Complication
+GI_HCC21,0.326,disease,GI,Protein-Calorie Malnutrition
+GI_HCC22,0.435,disease,GI,Morbid Obesity
+GI_HCC23,0.332,disease,GI,Other Significant Endocrine and Metabolic Disorders
+GI_HCC27,0.764,disease,GI,End-Stage Liver Disease
+GI_HCC28,0.327,disease,GI,Cirrhosis of Liver
+GI_HCC29,0.327,disease,GI,Chronic Hepatitis
+GI_HCC33,0.278,disease,GI,Intestinal Obstruction/Perforation
+GI_HCC34,0.178,disease,GI,Chronic Pancreatitis
+GI_HCC35,0.287,disease,GI,Inflammatory Bowel Disease
+GI_HCC39,0.434,disease,GI,Bone/Joint/Muscle Infections/Necrosis
+GI_HCC40,0.284,disease,GI,Rheumatoid Arthritis and Inflammatory Connective Tissue Disease
+GI_HCC46,0.748,disease,GI,Severe Hematological Disorders
+GI_HCC47,0.523,disease,GI,Disorders of Immunity
+GI_HCC48,0.226,disease,GI,Coagulation Defects and Other Specified Hematological Disorders
+GI_HCC51,0.000,disease,GI,Dementia With Complications
+GI_HCC52,0.000,disease,GI,Dementia Without Complication
+GI_HCC54,0.172,disease,GI,Substance Use with Psychotic Complications
+GI_HCC55,0.172,disease,GI,Substance Use Disorder/Moderate/Severe/Substance Use with Complications
+GI_HCC56,0.172,disease,GI,Substance Use Disorder/Mild/Except Alcohol and Cannabis
+GI_HCC57,0.230,disease,GI,Schizophrenia
+GI_HCC58,0.230,disease,GI,Reactive and Unspecified Psychosis
+GI_HCC59,0.133,disease,GI,Major Depressive/Bipolar/and Paranoid Disorders
+GI_HCC60,0.000,disease,GI,Personality Disorders
+GI_HCC70,0.645,disease,GI,Quadriplegia
+GI_HCC71,0.511,disease,GI,Paraplegia
+GI_HCC72,0.222,disease,GI,Spinal Cord Disorders/Injuries
+GI_HCC73,0.739,disease,GI,Amyotrophic Lateral Sclerosis and Other Motor Neuron Disease
+GI_HCC74,0.000,disease,GI,Cerebral Palsy
+GI_HCC75,0.344,disease,GI,Myasthenia Gravis/Myoneural Disorders and Guillain-Barre Syndrome/Inflammatory and Toxic Neuropathy
+GI_HCC76,0.322,disease,GI,Muscular Dystrophy
+GI_HCC77,0.042,disease,GI,Multiple Sclerosis
+GI_HCC78,0.206,disease,GI,Parkinsons and Huntingtons Diseases
+GI_HCC79,0.070,disease,GI,Seizure Disorders and Convulsions
+GI_HCC80,0.063,disease,GI,Coma/Brain Compression/Anoxic Damage
+GI_HCC82,1.449,disease,GI,Respirator Dependence/Tracheostomy Status
+GI_HCC83,0.481,disease,GI,Respiratory Arrest
+GI_HCC84,0.199,disease,GI,Cardio-Respiratory Failure and Shock
+GI_HCC85,0.169,disease,GI,Congestive Heart Failure
+GI_HCC86,0.280,disease,GI,Acute Myocardial Infarction
+GI_HCC87,0.280,disease,GI,Unstable Angina and Other Acute Ischemic Heart Disease
+GI_HCC88,0.280,disease,GI,Angina Pectoris
+GI_HCC96,0.227,disease,GI,Specified Heart Arrhythmias
+GI_HCC99,0.082,disease,GI,Intracranial Hemorrhage
+GI_HCC100,0.082,disease,GI,Ischemic or Unspecified Stroke
+GI_HCC103,0.013,disease,GI,Hemiplegia/Hemiparesis
+GI_HCC104,0.013,disease,GI,Monoplegia/Other Paralytic Syndromes
+GI_HCC106,0.873,disease,GI,Atherosclerosis of the Extremities with Ulceration or Gangrene
+GI_HCC107,0.324,disease,GI,Vascular Disease with Complications
+GI_HCC108,0.074,disease,GI,Vascular Disease
+GI_HCC110,0.329,disease,GI,Cystic Fibrosis
+GI_HCC111,0.272,disease,GI,Chronic Obstructive Pulmonary Disease
+GI_HCC112,0.080,disease,GI,Fibrosis of Lung and Other Chronic Lung Disorders
+GI_HCC114,0.154,disease,GI,Aspiration and Specified Bacterial Pneumonias
+GI_HCC115,0.154,disease,GI,Pneumococcal Pneumonia/Empyema/Lung Abscess
+GI_HCC122,0.727,disease,GI,Proliferative Diabetic Retinopathy and Vitreous Hemorrhage
+GI_HCC124,0.206,disease,GI,Exudative Macular Degeneration
+GI_HCC134,0.000,disease,GI,Dialysis Status
+GI_HCC135,0.000,disease,GI,Acute Renal Failure
+GI_HCC136,0.000,disease,GI,Chronic Kidney Disease/Stage 5
+GI_HCC137,0.000,disease,GI,Chronic Kidney Disease/Severe (Stage 4)
+GI_HCC138,0.000,disease,GI,Chronic Kidney Disease/Moderate (Stage 3)
+GI_HCC157,1.029,disease,GI,Pressure Ulcer of Skin with Necrosis Through to Muscle/Tendon/Bone
+GI_HCC158,0.243,disease,GI,Pressure Ulcer of Skin with Full Thickness Skin Loss
+GI_HCC159,0.243,disease,GI,Pressure Ulcer of Skin with Partial Thickness Skin Loss
+GI_HCC161,0.243,disease,GI,Chronic Ulcer of Skin/Except Pressure
+GI_HCC162,0.000,disease,GI,Severe Skin Burn or Condition
+GI_HCC166,0.063,disease,GI,Severe Head Injury
+GI_HCC167,0.000,disease,GI,Major Head Injury
+GI_HCC169,0.184,disease,GI,Vertebral Fractures without Spinal Cord Injury
+GI_HCC170,0.000,disease,GI,Hip Fracture/Dislocation
+GI_HCC173,0.000,disease,GI,Traumatic Amputations and Complications
+GI_HCC176,0.586,disease,GI,Complications of Specified Implanted Device or Graft
+GI_HCC186,0.000,disease,GI,Major Organ Transplant or Replacement Status
+GI_HCC188,0.272,disease,GI,Artificial Openings for Feeding or Elimination
+GI_HCC189,0.396,disease,GI,Amputation Status/Lower Limb/Amputation Complications
+GI_NONAGED_HCC85,0.491,disease,GI,NonAged/Congestive Heart Failure
+GI_NONAGED_PRESSURE_ULCER_V24,0.349,interaction,GI,NonAged/Pressure Ulcer
+GI_NONAGED_HCC161,0.271,disease,GI,NonAged/Chronic Ulcer of the Skin/Except Pressure Ulcer
+GI_NONAGED_HCC39,0.451,disease,GI,NonAged/Bone/Joint Muscle Infections/Necrosis
+GI_NONAGED_HCC77,0.484,disease,GI,NonAged/Multiple Sclerosis
+GI_NONAGED_HCC6,0.209,disease,GI,NonAged/Opportunistic Infections
+GI_CHF_gCopdCF,0.165,interaction,GI,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+GI_gCopdCF_CARD_RESP_FAIL,0.356,interaction,GI,Cardiorespiratory Failure *Chronic Obstructive Pulmonary Disease
+GI_SEPSIS_PRESSURE_ULCER_V24,0.196,interaction,GI,Sepsis*Pressure Ulcer
+GI_SEPSIS_ARTIF_OPENINGS,0.496,interaction,GI,Sepsis*Artificial Openings for Feeding or Elimination
+GI_ART_OPENINGS_PRESS_ULCER_V24,0.476,interaction,GI,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+GI_DIABETES_CHF,0.205,interaction,GI,Congestive Heart Failure*Diabetes
+GI_gCopdCF_ASP_SPEC_B_PNEUM,0.143,interaction,GI,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+GI_ASP_SPEC_B_PNEUM_PRES_ULC_V24,0.336,interaction,GI,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+GI_SEPSIS_ASP_SPEC_BACT_PNEUM,0.162,interaction,GI,Sepsis*Aspiration and Specified Bacterial Pneumonias
+GI_SCHIZOPHRENIA_gCopdCF,0.380,interaction,GI,Schizophrenia*Chronic Obstructive Pulmonary Disease
+GI_SCHIZOPHRENIA_CHF,0.119,interaction,GI,Schizophrenia*Congestive Heart Failure
+GI_SCHIZOPHRENIA_SEIZURES,0.411,interaction,GI,Schizophrenia*Seizure Disorders and Convulsions
+FGI_LT65_DUR4_9_ND_PBD,1.737,demographic,FGI,NonAged/with duration since transplant of 4-9 months/NonDual and Partial Benefit Dual
+FGI_LT65_DUR4_9_FBD,2.083,demographic,FGI,NonAged/with duration since transplant of 4-9 months/Full Benefit Dual
+FGI_GE65_DUR4_9_ND_PBD,2.529,demographic,FGI,Aged/with duration since transplant of 4-9 months/NonDual and Partial Benefit Dual
+FGI_GE65_DUR4_9_FBD,2.605,demographic,FGI,Aged/with duration since transplant of 4-9 months/Full Benefit Dual
+FGI_LT65_DUR10PL_ND_PBD,0.335,demographic,FGI,NonAged/with duration since transplant of 10 months or more/NonDual and Partial Benefit Dual
+FGI_LT65_DUR10PL_FBD,0.648,demographic,FGI,NonAged/with duration since transplant of 10 months or more/Full Benefit Dual
+FGI_GE65_DUR10PL_ND_PBD,0.905,demographic,FGI,Aged/with duration since transplant of 10 months or more/NonDual and Partial Benefit Dual
+FGI_GE65_DUR10PL_FBD,1.279,demographic,FGI,Aged/with duration since transplant of 10 months or more/Full Benefit Dual
+LTI_LT65,2.146,demographic,LTI,Institutional Status/NonAged
+LTI_GE65,0.955,demographic,LTI,Institutional Status/Aged
+FGI_PBD_LT65_flag,0.141,demographic,FGI,Partial Benefit Dual/NonAged
+FGI_PBD_GE65_flag,0.162,demographic,FGI,Partial Benefit Dual/Aged
+GNE_ND_PBD_NORIGDIS_G_NEF0_34,0.705,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 0-34
+GNE_ND_PBD_NORIGDIS_G_NEF35_44,0.942,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 35-44
+GNE_ND_PBD_NORIGDIS_G_NEF45_54,1.145,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 45-54
+GNE_ND_PBD_NORIGDIS_G_NEF55_59,1.142,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 55-59
+GNE_ND_PBD_NORIGDIS_G_NEF60_64,1.202,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 60-64
+GNE_ND_PBD_NORIGDIS_G_NEF65,0.527,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 65
+GNE_ND_PBD_NORIGDIS_G_NEF66,0.527,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 66
+GNE_ND_PBD_NORIGDIS_G_NEF67,0.553,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 67
+GNE_ND_PBD_NORIGDIS_G_NEF68,0.579,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 68
+GNE_ND_PBD_NORIGDIS_G_NEF69,0.619,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 69
+GNE_ND_PBD_NORIGDIS_G_NEF70_74,0.688,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 70-74
+GNE_ND_PBD_NORIGDIS_G_NEF75_79,0.893,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 75-79
+GNE_ND_PBD_NORIGDIS_G_NEF80_84,0.980,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 80-84
+GNE_ND_PBD_NORIGDIS_G_NEF85_89,1.275,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 85-89
+GNE_ND_PBD_NORIGDIS_G_NEF90_94,1.275,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 90-94
+GNE_ND_PBD_NORIGDIS_G_NEF95_GT,1.275,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Female 95+
+GNE_ND_PBD_NORIGDIS_G_NEM0_34,0.405,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 0-34
+GNE_ND_PBD_NORIGDIS_G_NEM35_44,0.663,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 35-44
+GNE_ND_PBD_NORIGDIS_G_NEM45_54,0.898,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 45-54
+GNE_ND_PBD_NORIGDIS_G_NEM55_59,0.976,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 55-59
+GNE_ND_PBD_NORIGDIS_G_NEM60_64,1.048,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 60-64
+GNE_ND_PBD_NORIGDIS_G_NEM65,0.562,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 65
+GNE_ND_PBD_NORIGDIS_G_NEM66,0.570,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 66
+GNE_ND_PBD_NORIGDIS_G_NEM67,0.612,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 67
+GNE_ND_PBD_NORIGDIS_G_NEM68,0.672,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 68
+GNE_ND_PBD_NORIGDIS_G_NEM69,0.678,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 69
+GNE_ND_PBD_NORIGDIS_G_NEM70_74,0.801,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 70-74
+GNE_ND_PBD_NORIGDIS_G_NEM75_79,1.040,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 75-79
+GNE_ND_PBD_NORIGDIS_G_NEM80_84,1.234,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 80-84
+GNE_ND_PBD_NORIGDIS_G_NEM85_89,1.502,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 85-89
+GNE_ND_PBD_NORIGDIS_G_NEM90_94,1.502,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 90-94
+GNE_ND_PBD_NORIGDIS_G_NEM95_GT,1.502,interaction,GNE,NonDual or Partial Benefit Dual -- Not Originally Disabled Male 95+
+GNE_FBD_NORIGDIS_G_NEF0_34,1.016,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 0-34
+GNE_FBD_NORIGDIS_G_NEF35_44,1.291,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 35-44
+GNE_FBD_NORIGDIS_G_NEF45_54,1.403,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 45-54
+GNE_FBD_NORIGDIS_G_NEF55_59,1.278,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 55-59
+GNE_FBD_NORIGDIS_G_NEF60_64,1.384,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 60-64
+GNE_FBD_NORIGDIS_G_NEF65,0.978,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 65
+GNE_FBD_NORIGDIS_G_NEF66,0.982,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 66
+GNE_FBD_NORIGDIS_G_NEF67,0.996,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 67
+GNE_FBD_NORIGDIS_G_NEF68,0.996,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 68
+GNE_FBD_NORIGDIS_G_NEF69,0.996,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 69
+GNE_FBD_NORIGDIS_G_NEF70_74,1.034,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 70-74
+GNE_FBD_NORIGDIS_G_NEF75_79,1.119,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 75-79
+GNE_FBD_NORIGDIS_G_NEF80_84,1.331,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 80-84
+GNE_FBD_NORIGDIS_G_NEF85_89,1.549,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 85-89
+GNE_FBD_NORIGDIS_G_NEF90_94,1.697,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 90-94
+GNE_FBD_NORIGDIS_G_NEF95_GT,1.697,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Female 95+
+GNE_FBD_NORIGDIS_G_NEM0_34,0.732,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 0-34
+GNE_FBD_NORIGDIS_G_NEM35_44,1.253,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 35-44
+GNE_FBD_NORIGDIS_G_NEM45_54,1.407,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 45-54
+GNE_FBD_NORIGDIS_G_NEM55_59,1.464,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 55-59
+GNE_FBD_NORIGDIS_G_NEM60_64,1.529,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 60-64
+GNE_FBD_NORIGDIS_G_NEM65,1.171,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 65
+GNE_FBD_NORIGDIS_G_NEM66,1.223,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 66
+GNE_FBD_NORIGDIS_G_NEM67,1.308,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 67
+GNE_FBD_NORIGDIS_G_NEM68,1.355,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 68
+GNE_FBD_NORIGDIS_G_NEM69,1.443,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 69
+GNE_FBD_NORIGDIS_G_NEM70_74,1.443,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 70-74
+GNE_FBD_NORIGDIS_G_NEM75_79,1.443,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 75-79
+GNE_FBD_NORIGDIS_G_NEM80_84,1.489,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 80-84
+GNE_FBD_NORIGDIS_G_NEM85_89,1.667,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 85-89
+GNE_FBD_NORIGDIS_G_NEM90_94,1.964,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 90-94
+GNE_FBD_NORIGDIS_G_NEM95_GT,1.964,interaction,GNE,Full Benefit Dual -- Not Originally Disabled Male 95+
+GNE_ND_PBD_ORIGDIS_G_NEF65,1.202,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 65
+GNE_ND_PBD_ORIGDIS_G_NEF66,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 66
+GNE_ND_PBD_ORIGDIS_G_NEF67,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 67
+GNE_ND_PBD_ORIGDIS_G_NEF68,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 68
+GNE_ND_PBD_ORIGDIS_G_NEF69,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 69
+GNE_ND_PBD_ORIGDIS_G_NEF70_74,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 70-74
+GNE_ND_PBD_ORIGDIS_G_NEF75_79,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 75-79
+GNE_ND_PBD_ORIGDIS_G_NEF80_84,1.265,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 80-84
+GNE_ND_PBD_ORIGDIS_G_NEF85_89,1.275,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 85-89
+GNE_ND_PBD_ORIGDIS_G_NEF90_94,1.275,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 90-94
+GNE_ND_PBD_ORIGDIS_G_NEF95_GT,1.275,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Female 95+
+GNE_ND_PBD_ORIGDIS_G_NEM65,1.048,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 65
+GNE_ND_PBD_ORIGDIS_G_NEM66,1.145,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 66
+GNE_ND_PBD_ORIGDIS_G_NEM67,1.145,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 67
+GNE_ND_PBD_ORIGDIS_G_NEM68,1.145,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 68
+GNE_ND_PBD_ORIGDIS_G_NEM69,1.286,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 69
+GNE_ND_PBD_ORIGDIS_G_NEM70_74,1.286,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 70-74
+GNE_ND_PBD_ORIGDIS_G_NEM75_79,1.286,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 75-79
+GNE_ND_PBD_ORIGDIS_G_NEM80_84,1.286,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 80-84
+GNE_ND_PBD_ORIGDIS_G_NEM85_89,1.502,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 85-89
+GNE_ND_PBD_ORIGDIS_G_NEM90_94,1.502,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 90-94
+GNE_ND_PBD_ORIGDIS_G_NEM95_GT,1.502,interaction,GNE,NonDual or Partial Benefit Dual and Originally Disabled Male 95+
+GNE_FBD_ORIGDIS_G_NEF65,1.585,interaction,GNE,Full Benefit Dual and Originally Disabled Female 65
+GNE_FBD_ORIGDIS_G_NEF66,1.585,interaction,GNE,Full Benefit Dual and Originally Disabled Female 66
+GNE_FBD_ORIGDIS_G_NEF67,1.585,interaction,GNE,Full Benefit Dual and Originally Disabled Female 67
+GNE_FBD_ORIGDIS_G_NEF68,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 68
+GNE_FBD_ORIGDIS_G_NEF69,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 69
+GNE_FBD_ORIGDIS_G_NEF70_74,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 70-74
+GNE_FBD_ORIGDIS_G_NEF75_79,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 75-79
+GNE_FBD_ORIGDIS_G_NEF80_84,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 80-84
+GNE_FBD_ORIGDIS_G_NEF85_89,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 85-89
+GNE_FBD_ORIGDIS_G_NEF90_94,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 90-94
+GNE_FBD_ORIGDIS_G_NEF95_GT,2.004,interaction,GNE,Full Benefit Dual and Originally Disabled Female 95+
+GNE_FBD_ORIGDIS_G_NEM65,1.711,interaction,GNE,Full Benefit Dual and Originally Disabled Male 65
+GNE_FBD_ORIGDIS_G_NEM66,1.942,interaction,GNE,Full Benefit Dual and Originally Disabled Male 66
+GNE_FBD_ORIGDIS_G_NEM67,1.942,interaction,GNE,Full Benefit Dual and Originally Disabled Male 67
+GNE_FBD_ORIGDIS_G_NEM68,1.942,interaction,GNE,Full Benefit Dual and Originally Disabled Male 68
+GNE_FBD_ORIGDIS_G_NEM69,1.942,interaction,GNE,Full Benefit Dual and Originally Disabled Male 69
+GNE_FBD_ORIGDIS_G_NEM70_74,1.942,interaction,GNE,Full Benefit Dual and Originally Disabled Male 70-74
+GNE_FBD_ORIGDIS_G_NEM75_79,2.788,interaction,GNE,Full Benefit Dual and Originally Disabled Male 75-79
+GNE_FBD_ORIGDIS_G_NEM80_84,2.788,interaction,GNE,Full Benefit Dual and Originally Disabled Male 80-84
+GNE_FBD_ORIGDIS_G_NEM85_89,2.788,interaction,GNE,Full Benefit Dual and Originally Disabled Male 85-89
+GNE_FBD_ORIGDIS_G_NEM90_94,2.788,interaction,GNE,Full Benefit Dual and Originally Disabled Male 90-94
+GNE_FBD_ORIGDIS_G_NEM95_GT,2.788,interaction,GNE,Full Benefit Dual and Originally Disabled Male 95+
+TRANSPLANT_KIDNEY_ONLY_1M,5.985,demographic,TRANSPLANT,Kidney Transplant/Month 1
+TRANSPLANT_KIDNEY_ONLY_2M,0.941,demographic,TRANSPLANT,Kidney Transplant/Month 2
+TRANSPLANT_KIDNEY_ONLY_3M,0.941,demographic,TRANSPLANT,Kidney Transplant/Month 3

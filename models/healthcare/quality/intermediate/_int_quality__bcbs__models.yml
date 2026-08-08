@@ -1,0 +1,194 @@
+version: 2
+
+# Schema — DEV-4296 PAYOR_A-MN intermediate layer.
+# code_evidence (thin code-level layer, feeds contract_output's CODE/CODE_TYPE) + the OBGYN-form
+# assumed-code recovery (payer-specific Q27/Q28-compliant sidecar) feed into int_quality__payor_alpha_submission
+# (the PAYOR_A sidecar — payer-specific roster/send_strategy/submittability decisions, reading the
+# payer-agnostic HEDIS funnel). Mirrors the shape of _int_quality__payor_gamma__models.yml but PAYOR_A-native
+# predicates (Constitution P14: never leak PAYOR_A logic into the shared path).
+
+models:
+  - name: int_quality__payor_alpha_code_evidence
+    description: >
+      Slice-2 step A: the CODE-LEVEL layer. For each patient x PAYOR_A measure, the single best
+      SUBMITTABLE accepted code, drawn from the payor-agnostic int_quality__code_pool and gated
+      against the PAYOR_A accepted-code allowlist (ref_payor_alpha_accepted_codes). Feeds the
+      CODE / CODE_TYPE (file cols 28-29) of fct_quality__payor_alpha_mn_contract_output. In the new
+      architecture the QM-native int_quality__hedis_evidence / int_quality__payer_submission
+      owns measure determination + closure_state; this model only supplies the code. Grain: one
+      row per (patient_id x measure_type) — rank-1 by latest date_of_service, deterministic
+      tiebreak (code, code_type).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_A, dev-4296]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - measure_type
+    columns:
+      - name: patient_id
+        description: "Patient ID carried through from the payor-agnostic int_quality__code_pool."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "PAYOR_A measure_type the code was assigned to, via explode of ref_payor_alpha_measure_spec.code_lists matched to the accepted-code allowlist (a code may serve more than one measure)."
+        data_tests: [not_null]
+      - name: code
+        description: "Best accepted code (rank-1, latest date_of_service) gated against the PAYOR_A accepted-code allowlist."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Code system/vocab of `code`, carried through from code_pool and matched to the PAYOR_A accepted-code allowlist's code_system."
+        data_tests: [not_null]
+      - name: date_of_service
+        description: "Service date of the evidence, carried through from code_pool."
+        data_tests: [not_null]
+      - name: code_list
+        description: "PAYOR_A accepted-code-list name (ref_payor_alpha_accepted_codes.code_list) the code matched on."
+      - name: code_origin
+        description: "Provenance tier carried through from code_pool ('system' or 'org_added')."
+      - name: source_tables
+        description: "Source table(s) the code was derived from, carried through from code_pool."
+      - name: measurement_year
+        description: "Measurement year (HEDIS reporting year); dynamic var, default = current calendar year."
+        data_tests: [not_null]
+
+  - name: int_quality__payor_alpha_obgyn_recovery
+    description: >
+      PAYOR_A sidecar OBGYN-form colorectal-screening recovery (payer-specific, NOT a payer-agnostic
+      funnel branch). Promotes documented colorectal-screening evidence from
+      athena.athenaone.patientobgynhistory to one of 5 PAYOR_A-accepted assumed codes via the
+      Destiny-Harris-authorized policy (ref_payor_alpha_assumed_codes) — Q27 (code asserted per
+      leadership-authorized policy, not inferred/fabricated) and Q28 compliant. Fully
+      expiry-gated: if the authorization has lapsed or the seed is empty, zero rows recover
+      (fail-safe). BCS (mammogram) is intentionally absent — Destiny authorized COL recovery
+      only; BCS form data is gap-only.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_A, dev-4296]
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "Always 'COLScr' — this recovery only targets the PAYOR_A colorectal-screening measure."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['COLScr']
+      - name: code
+        description: "Assumed code mapped from the classified OBGYN-form modality (one of the 5 Destiny-authorized colorectal-screening codes)."
+        data_tests: [not_null]
+      - name: code_type
+        description: "Vocab of `code`: HCPCS for FOBT_FIT, CPT for SDNA_FIT, SNOMED for all other modalities."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['HCPCS', 'CPT', 'SNOMED']
+      - name: date_of_service
+        description: "Parsed OBGYN-history-form answer date."
+        data_tests: [not_null]
+      - name: code_origin
+        description: "Always 'system'."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['system']
+      - name: order_status
+        description: "Always 'submittable'."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['submittable']
+      - name: evidence_provenance
+        description: "Always 'soft' (form-derived, not billed/closed-encounter evidence)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['soft']
+      - name: col_method
+        description: "Classified colorectal-screening modality from the OBGYN-history-form question/answer text."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COLONOSCOPY', 'SIGMOIDOSCOPY', 'FOBT_FIT', 'CT_COLONOGRAPHY', 'SDNA_FIT']
+      - name: lookback_months
+        description: "HEDIS lookback window for the modality (120 for colonoscopy, 60 for sigmoidoscopy/CT colonography, 12 for FOBT/FIT, 36 for sDNA/FIT)."
+      - name: expiration_date
+        description: "date_of_service + lookback_months."
+      - name: create_date
+        description: "Same as date_of_service."
+      - name: result_value
+        description: "Modality rank (1-5) cast to string, mirrors the HEDIS result-value convention for this measure."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['1', '2', '3', '4', '5']
+      - name: code_source
+        description: "Always 'OBGYN_FORM_DESTINY_AUTHORIZED' — the Q27/Q28 authorization tag carried to the submission output."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['OBGYN_FORM_DESTINY_AUTHORIZED']
+
+  - name: int_quality__payor_alpha_submission
+    description: >
+      The PAYOR_A sidecar (payer-specific decisions only: roster, registry/send_strategy routing,
+      order_status submittability, and future file-format/enrichment). Reads the payer-agnostic
+      HEDIS funnel layer (int_quality__measure_dated_evidence), which already assigned the
+      measure and stamped the HEDIS expiration_date / lookback_months — no HEDIS rule is
+      computed here. Applies PAYOR_A-specific stipulations: RetEye provider-type exclusion (no
+      HH eye-care providers so generic E&M codes 99201-99215 are excluded), CCS age 24-64,
+      COL code-safety (drops raw colonoscopy SNOMEDs PAYOR_A does not accept), plus
+      send_strategy-driven ranking (ALL / MOST_RECENT / BEST_EVIDENCE) and the value-required
+      gate for result-driven measures (must carry a numeric result_value or the row is
+      excluded, routing to gap instead).
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, hedis, intermediate, PAYOR_A, dev-4296]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - measure_type
+              - code
+              - code_type
+              - date_of_service
+    columns:
+      - name: patient_id
+        description: "Normalized clean int-string patient_id (cast(cast(x as decimal(38,0)) as string))."
+        data_tests: [not_null]
+      - name: measure_type
+        description: "PAYOR_A measure_type the code was assigned to, via explode of ref_payor_alpha_measure_spec.code_lists matched to the accepted-code allowlist (a code may serve more than one measure)."
+        data_tests: [not_null]
+      - name: code
+        description: "Accepted code shipped for this measure; NULL for result-only measures (e.g. blood pressure)."
+      - name: code_type
+        description: "Code system/vocab of `code`, carried through from code_pool."
+      - name: date_of_service
+        description: "Service date of the evidence, carried through from code_pool."
+        data_tests: [not_null]
+      - name: code_origin
+        description: "Provenance tier carried through from code_pool ('system' or 'org_added')."
+      - name: order_status
+        description: "Always 'submittable' — filtered upstream (he.order_status = 'submittable')."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['submittable']
+      - name: evidence_provenance
+        description: "Best evidence-provenance tier carried through from code_pool (billed/closed_encounter/resulted/surgical/soft)."
+      - name: col_method
+        description: "Colorectal-screening modality; populated only for COLScr rows."
+      - name: send_strategy
+        description: "How PAYOR_A wants this measure shipped — ALL (every accepted-code row), MOST_RECENT (rank-1 latest), or BEST_EVIDENCE (rank-1, latest as v1 proxy); sourced from ref_measure_code_mapping, defaults to 'MOST_RECENT'."
+      - name: lookback_months
+        description: "HEDIS lookback window carried through from the payer-agnostic funnel."
+      - name: expiration_date
+        description: "HEDIS expiration_date carried through as an additive attribute; PAYOR_A does not discard on it."
+      - name: create_date
+        description: "Row create date carried through from code_pool."
+      - name: result_value
+        description: "Numeric/text result; required (non-null) for result-driven measures (HbA1c/eGFR/uACR/BP/PHQ9/GAD7/AlcoholScr/LDL), otherwise those rows are excluded."

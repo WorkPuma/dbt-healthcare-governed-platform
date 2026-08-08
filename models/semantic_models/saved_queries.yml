@@ -1,0 +1,318 @@
+version: 2
+
+# =============================================================================
+# SAVED QUERIES
+# Pre-built metric queries for common use cases, optimized for BI consumption.
+#
+# These centralize the metric + grain combinations that BI pulls repeatedly, so
+# the definitions live in the semantic layer (single source of truth) instead of
+# being re-expressed per dashboard. Intentionally declared WITHOUT `exports:` —
+# they create no warehouse objects at build time; they are validated by
+# `dbtf parse` in CI and queryable via the dbt Semantic Layer / `dbt sl`. Add an
+# `exports:` block (with a target schema) only when a materialized copy is needed.
+# =============================================================================
+
+saved_queries:
+  # New Patient Visits — weekly trend of the headline volume + rate metrics.
+  # Uses metric_time (the primary agg-time dimension, period_start) only, which
+  # is guaranteed valid for every NPV metric; categorical slices are added per
+  # dashboard once declared as dimensions on the mart's semantic_model.
+  - name: npv_weekly_overview
+    description: |
+      Weekly New Patient Visit volumes and conversion/recovery rates.
+      Use for: NPV Dashboard headline trend, weekly operating review.
+      Combines the simple measures (mart_npv_weekly) with the ratio metrics
+      (sem_npv) so every consumer agrees on the rate math.
+    label: "NPV Weekly Overview"
+    query_params:
+      metrics:
+        - total_npv
+        - completed_npv
+        - cancelled_npv
+        - total_recovered_npv
+        - npv_completion_rate
+        - npv_cancellation_rate
+        - npv_recovery_rate
+      group_by:
+        - "TimeDimension('metric_time', 'week')"
+
+  # Membership-segmented NPV monthly view for the MBR operating review.
+  - name: npv_membership_monthly
+    description: |
+      Monthly NPV volumes scoped to the commercial-membership population.
+      Use for: MBR operating review, membership funnel reporting.
+    label: "NPV Membership (Monthly)"
+    query_params:
+      metrics:
+        - mbr_total_npv
+        - mbr_cancelled_npv
+        - mbr_total_recovered_npv
+        - mbr_npv_cancellation_rate
+        - mbr_npv_recovery_rate
+      group_by:
+        - "TimeDimension('metric_time', 'month')"
+
+# -----------------------------------------------------------------------------
+# Additional examples (kept commented — reference patterns for exports/filters):
+# saved_queries:
+#   # ---------------------------------------------------------------------------
+#   # AWV EXECUTIVE DASHBOARD
+#   # ---------------------------------------------------------------------------
+#   - name: awv_executive_summary
+#     description: |
+#       Executive summary of AWV performance by attribution payor.
+#       Use for: AWV Dashboard, Executive Reporting, Monthly Reviews
+#       Includes period-over-period comparisons (MoM, YoY).
+#     label: "AWV Executive Summary"
+#     query_params:
+#       metrics:
+#         - total_awv_eligible
+#         - total_awv_completed
+#         - total_awv_scheduled
+#         - awv_completion_rate
+#         - awv_projected_completion_rate
+#         - awv_completed_cumulative
+#         - awv_completed_vs_prior_month
+#         - awv_yoy_growth_rate
+#       group_by:
+#         - TimeDimension('attribution_payor__report_date', 'month')
+#         - Dimension('attribution_payor__attribution')
+#       where:
+#         - "{{ TimeDimension('attribution_payor__report_date', 'day') }} >= dateadd(year, -1, current_date())"
+#     exports:
+#       - name: awv_executive_summary_export
+#         config:
+#           alias: awv_executive_summary
+#           schema: semantic_exports
+#           export_as: table
+#
+#   # ---------------------------------------------------------------------------
+#   # PATIENT ATTRIBUTION OVERVIEW
+#   # ---------------------------------------------------------------------------
+#   - name: attribution_by_payor
+#     description: |
+#       Patient attribution breakdown by payor type and clinic.
+#       Use for: VBC Dashboard, Attribution Analysis
+#       Includes period-over-period comparisons (MoM, YoY).
+#     label: "Attribution by Payor"
+#     query_params:
+#       metrics:
+#         - total_patient_count
+#         - attributed_patient_count
+#         - attribution_rate
+#         - patients_with_awv_count
+#         - attributed_awv_rate
+#         - attributed_patients_cumulative
+#         - attributed_patients_mom_change
+#         - attribution_yoy_growth_rate
+#       group_by:
+#         - Dimension('patient__payor_type')
+#         - Dimension('patient__assigned_clinic')
+#         - Dimension('patient__attribution_category')
+#     exports:
+#       - name: attribution_by_payor_export
+#         config:
+#           alias: attribution_by_payor
+#           schema: semantic_exports
+#           export_as: table
+#
+#   # ---------------------------------------------------------------------------
+#   # SCHEDULING CAPACITY FORECAST
+#   # ---------------------------------------------------------------------------
+#   - name: capacity_next_30_days
+#     description: |
+#       Scheduling capacity forecast for the next 30 days by clinic and provider.
+#       Use for: Operations Dashboard, Capacity Planning
+#     label: "30-Day Capacity Forecast"
+#     query_params:
+#       metrics:
+#         - total_slot_count
+#         - booked_slot_count
+#         - open_slot_count
+#         - slot_utilization_rate
+#         - slot_availability_rate
+#       group_by:
+#         - TimeDimension('appointment__appointment_date', 'day')
+#         - Dimension('appointment__clinic')
+#         - Dimension('appointment__provider_name')
+#         - Dimension('appointment__provider_type')
+#       where:
+#         - "{{ TimeDimension('appointment__appointment_date', 'day') }} >= current_date()"
+#         - "{{ TimeDimension('appointment__appointment_date', 'day') }} < dateadd(day, 30, current_date())"
+#     exports:
+#       - name: capacity_forecast_export
+#         config:
+#           alias: capacity_next_30_days
+#           schema: semantic_exports
+#           export_as: view
+#
+#   # ---------------------------------------------------------------------------
+#   # BEHAVIORAL HEALTH OUTCOMES
+#   # ---------------------------------------------------------------------------
+#   - name: bh_clinical_outcomes
+#     description: |
+#       Behavioral health PHQ-9 and GAD-7 outcomes summary.
+#       Use for: BH Dashboard, Clinical Quality Reporting
+#     label: "BH Clinical Outcomes"
+#     query_params:
+#       metrics:
+#         - bh_patient_count
+#         - phq9_remission_rate
+#         - phq9_response_rate
+#         - gad7_remission_rate
+#         - gad7_response_rate
+#         - average_phq9
+#         - average_gad7
+#       group_by:
+#         - Dimension('patient__program_name')
+#         - Dimension('patient__bh_clinical_risk_tier')
+#         - Dimension('patient__clinic_location')
+#
+#   # ---------------------------------------------------------------------------
+#   # TCM PERFORMANCE
+#   # ---------------------------------------------------------------------------
+#   - name: tcm_performance_weekly
+#     description: |
+#       Weekly TCM performance metrics for care management.
+#       Use for: Care Management Dashboard, TCM Reporting
+#     label: "Weekly TCM Performance"
+#     query_params:
+#       metrics:
+#         - total_tcm_cases
+#         - toc_completion_rate
+#         - toc_7day_rate
+#         - first_call_compliance_rate
+#         - readmission_rate
+#       group_by:
+#         - TimeDimension('tcm_case__discharge_date', 'week')
+#         - Dimension('tcm_case__attributed_payer')
+#         - Dimension('tcm_case__hospital')
+#
+#   # ---------------------------------------------------------------------------
+#   # PROVIDER NPS TRENDS
+#   # ---------------------------------------------------------------------------
+#   - name: provider_nps_monthly
+#     description: |
+#       Monthly NPS trends by provider and clinic.
+#       Use for: Patient Experience Dashboard, Provider Scorecards
+#     label: "Monthly Provider NPS"
+#     query_params:
+#       metrics:
+#         - nps_score
+#         - total_survey_responses
+#         - promoter_count
+#         - detractor_count
+#         - average_recommend_score
+#       group_by:
+#         - TimeDimension('survey__survey_date', 'month')
+#         - Dimension('survey__location')
+#         - Dimension('survey__physician_name')
+#       where:
+#         - "{{ TimeDimension('survey__survey_date', 'day') }} >= dateadd(year, -1, current_date())"
+#
+#   # ---------------------------------------------------------------------------
+#   # CBP QUALITY MEASURES (DISABLED - semantic model sem_cbp_quality.yml is disabled)
+#   # ---------------------------------------------------------------------------
+#   # - name: cbp_hedis_mips_summary
+#   #   description: |
+#   #     HEDIS and MIPS quality measure summary for blood pressure control.
+#   #     Use for: Quality Dashboard, Regulatory Reporting
+#   #   label: "CBP Quality Summary"
+#   #   query_params:
+#   #     metrics:
+#   #       - hedis_eligible_patients
+#   #       - hedis_compliant_patients
+#   #       - hedis_cbp_rate
+#   #       - mips_eligible_patients
+#   #       - mips_compliant_patients
+#   #       - mips_cbp_rate
+#   #       - bp_control_rate
+#   #     group_by:
+#   #       - Dimension('cbp_quality__cbp_department')
+#   #       - Dimension('cbp_quality__cbp_provider_name')
+#
+#   # ---------------------------------------------------------------------------
+#   # MEMBERSHIP FUNNEL
+#   # ---------------------------------------------------------------------------
+#   - name: membership_funnel
+#     description: |
+#       Membership enrollment funnel from prospect to active member.
+#       Use for: Membership Dashboard, Growth Reporting
+#       Includes period-over-period comparisons (MoM, YoY).
+#     label: "Membership Funnel"
+#     query_params:
+#       metrics:
+#         - total_membership_participants
+#         - prospect_count
+#         - lead_count
+#         - converted_lead_count
+#         - active_member_count
+#         - lead_conversion_rate
+#         - active_members_mom_change
+#         - members_yoy_growth_rate
+#       group_by:
+#         - Dimension('member__member_type')
+#         - Dimension('member__member_journey_stage')
+#         - Dimension('member__primary_payor')
+#
+#   # ---------------------------------------------------------------------------
+#   # PHYSICIAN CAPACITY DASHBOARD
+#   # ---------------------------------------------------------------------------
+#   - name: physician_capacity_weekly
+#     description: |
+#       Weekly physician capacity and utilization by department.
+#       Use for: Operations Dashboard, Provider Scheduling
+#     label: "Physician Capacity Weekly"
+#     query_params:
+#       metrics:
+#         - total_slot_count_phys
+#         - booked_slot_count_phys
+#         - open_slot_count_phys
+#         - physician_utilization_rate
+#         - physician_availability_rate
+#         - awv_slot_count
+#         - utilization_mom_change
+#       group_by:
+#         - TimeDimension('physician_slot__phys_appointment_date', 'week')
+#         - Dimension('physician_slot__phys_department_name')
+#         - Dimension('physician_slot__phys_provider_name')
+#         - Dimension('physician_slot__phys_is_awv')
+#       where:
+#         - "{{ TimeDimension('physician_slot__phys_appointment_date', 'day') }} >= current_date()"
+#         - "{{ TimeDimension('physician_slot__phys_appointment_date', 'day') }} < dateadd(day, 60, current_date())"
+#     exports:
+#       - name: physician_capacity_export
+#         config:
+#           alias: physician_capacity_weekly
+#           schema: semantic_exports
+#           export_as: view
+#
+#   # ---------------------------------------------------------------------------
+#   # TCM PERFORMANCE WITH TRENDS
+#   # ---------------------------------------------------------------------------
+#   - name: tcm_monthly_trends
+#     description: |
+#       Monthly TCM performance with period-over-period comparison.
+#       Use for: Care Management Dashboard, Executive Reporting
+#     label: "TCM Monthly Trends"
+#     query_params:
+#       metrics:
+#         - total_tcm_cases
+#         - toc_completion_rate
+#         - readmission_rate
+#         - tcm_cases_mom_change
+#         - toc_completion_rate_mom_change
+#         - readmission_rate_yoy_change
+#         - toc_completed_ytd
+#       group_by:
+#         - TimeDimension('tcm_case__discharge_date', 'month')
+#         - Dimension('tcm_case__hospital')
+#         - Dimension('tcm_case__attributed_payer')
+#       where:
+#         - "{{ TimeDimension('tcm_case__discharge_date', 'day') }} >= dateadd(year, -1, current_date())"
+#     exports:
+#       - name: tcm_monthly_trends_export
+#         config:
+#           alias: tcm_monthly_trends
+#           schema: semantic_exports
+#           export_as: table

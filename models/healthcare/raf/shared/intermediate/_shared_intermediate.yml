@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: int_patient_chart_crosswalk
+    description: >
+      Patient-to-chart crosswalk from Athena. Replaces TWICE.INTERTABLES.PATIENT_CHART_CROSSWALK.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - chart_id
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+      - name: chart_id
+        description: Clinical chart identifier.
+        tests: [not_null]
+
+  - name: int_patient_supplement
+    description: >
+      Enriched patient demographics with provider, department, custom demographics.
+      Replaces TWICE.INTERTABLES.PATIENT_SUPPLEMENT. FIXES B19 (actual patient sex).
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: sex_code
+        description: "M, F, or U - actual patient sex (NOT hardcoded F)"
+
+  - name: int_raf__demographic_spine
+    description: >
+      EMPI-keyed RAF demographic spine. One row per scoreable member, keyed on
+      entity_id (Athena patient_id for matched members, identity_id for roster-only
+      ghosts). UNION of Athena demographics (int_patient_supplement) and ghost
+      demographics carried on attribution_history. Ghosts have NULL patient_id and
+      all EHR-enrichment columns NULL; gender maps to sex_code (M/F/U, default U).
+      Single demographic input for the RAF score chain so demographic-only scores
+      can be produced for ghosts without joining any Athena/Salesforce table.
+    columns:
+      - name: entity_id
+        description: Stable EMPI member key (patient_id as string, else identity_id).
+        tests:
+          - not_null
+          - unique
+      - name: patient_id
+        description: Athena patient id; NULL for roster-only ghosts.
+      - name: identity_id
+        description: EMPI identity (H####); populated for ghost rows.
+      - name: is_ghost
+        description: True for roster-only members with no Athena record.
+        tests: [not_null]
+      - name: sex_code
+        description: "M, F, or U; ghosts with unknown gender resolve to U (factor 0)."
+
+  - name: int_patient_code_by_encounter
+    description: >
+      ICD-10 codes per clinical encounter with HCC mappings.
+      Replaces TWICE.INTERTABLES.PATIENT_CODE_BY_ENCOUNTER.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - patient_id
+              - clinical_encounter_id
+              - diagnosis_code
+    columns:
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+
+  - name: int_claim_info
+    description: >
+      Claims with aggregated notes and audit data.
+      Replaces TWICE.INTERTABLES.CLAIM_INFO. Drops dead claimstatus join (B3).
+    columns:
+      - name: claim_id
+        description: Unique claim identifier.
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+      - name: patient_id
+        description: Athena patient identifier; join key to dim_patient and RAF member models.
+        tests: [not_null]
+

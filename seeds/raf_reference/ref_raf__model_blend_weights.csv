@@ -1,0 +1,7 @@
+payment_year,model_version,blend_weight,normalization_factor,coding_intensity_adjustment,source_document,notes
+2024,V24,0.67,1.146,0.0590,CMS 2024 Rate Announcement (RAF FACTORS 2027),PY2024 EDPS blend is 67% CMS-HCC V24 (2020 model) + 33% V28.
+2024,V28,0.33,1.015,0.0590,CMS 2024 Rate Announcement (RAF FACTORS 2027),PY2024 EDPS blend is 67% V24 + 33% CMS-HCC V28 (2024 model).
+2025,V24,0.33,1.153,0.0590,CMS 2025 Rate Announcement (RAF FACTORS 2027),PY2025 EDPS blend is 33% CMS-HCC V24 + 67% V28.
+2025,V28,0.67,1.045,0.0590,CMS 2025 Rate Announcement (RAF FACTORS 2027),PY2025 EDPS blend is 33% V24 + 67% CMS-HCC V28.
+2026,V28,1.00,1.067,0.0590,CMS 2026 Rate Announcement (RAF FACTORS 2027),PY2026 is 100% CMS-HCC V28 (no V24 blend).
+2027,V28,1.00,1.079,0.0590,CMS 2027 Rate Announcement (RAF FACTORS 2027),"PY2027 is 100% V28.1; scored with V28 coefficients (model_version label V28) until full V28.1 coefficients are seeded. Normalization 1.079."

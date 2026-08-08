@@ -1,0 +1,202 @@
+version: 2
+
+# Schema — DEV-4296 evidence funnel · staging layer
+# Funnel-unique staging models: thin 1:1 over athenahealth.athenaone (Delta).
+#   clinicalresult / clinicalresultobservation / document          -> source('athenahealth_metadata',...)
+#   clinicalservice / clinicalserviceprocedurecode                 -> source('athenahealth',...)
+#   patientsurgicalhistory                                         -> source('athenahealth_metadata',...)
+# Shared athena encounter/icd/problem staging (clinicalencounter, clinicalencounterdiagnosis,
+#   clinicalencounterdxicd10, icdcodeall) are REUSED from models/healthcare/raf/shared/staging
+#   (canonical) — not redefined here. The intermediates ref() those existing models directly.
+# Deletes dropped in-model (history tables also drop deactivated/hidden).
+
+models:
+  # ---------- code-bearing ----------
+  - name: stg_athena__clinicalserviceprocedurecode
+    description: "Encounter service procedure codes (CPT/HCPCS/CPT-II/III mixed). Raw preserved with modifier; base split out."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: clinical_service_proc_code_id
+        description: "PK. /* VERIFY exact source column name */"
+        data_tests: [not_null, unique]
+      - name: clinical_service_id
+        description: "FK -> stg_athena__clinicalservice."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_athena__clinicalservice')
+                field: clinical_service_id
+      - name: procedure_code_raw
+        description: "Full procedure code incl. trailing ,modifier (preserved for billing reuse)."
+      - name: procedure_code_base
+        description: "Base code (token before first comma); classified to code_type in the intermediate."
+
+  - name: stg_athena__clinicalresultobservation
+    description: "Lab result observations — LOINC inline (OBSERVATIONIDENTIFIERLOINC) + result value."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: clinical_observation_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: clinical_result_id
+        description: "FK -> stg_athena__clinicalresult."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_athena__clinicalresult')
+                field: clinical_result_id
+      - name: loinc_code
+        description: "Inline LOINC code."
+
+  - name: stg_athena__patientsurgicalhistory
+    description: "Historical surgical history (patient-direct): CPT + SNOMED. Active-row (drops deleted + deactivated)."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: patient_surgical_history_id
+        description: "PK. /* VERIFY exact source column name */"
+        data_tests: [not_null, unique]
+      - name: patient_id
+        description: "Patient (direct — valid for this table)."
+        data_tests: [not_null]
+      - name: snomed_code
+        description: "SNOMED (usually populated)."
+      - name: procedure_code
+        description: "CPT (sparse)."
+
+  # ---------- support (supply patient_id + date for joins) ----------
+  - name: stg_athena__clinicalservice
+    description: "Bridges service procedure codes -> encounter."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    columns:
+      - name: clinical_service_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: clinical_encounter_id
+        description: "FK -> stg_athena__clinicalencounter. Athena clinicalservice.clinicalencounterid."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_athena__clinicalencounter')
+                field: clinical_encounter_id
+
+  - name: stg_athena__clinicalresult
+    description: "Lab result header — observation date + document_id for the LOINC branch."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    columns:
+      - name: clinical_result_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: document_id
+        description: "FK -> stg_athena__document. Athena clinicalresult.documentid."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_athena__document')
+                field: document_id
+
+  - name: stg_athena__document
+    description: "Document — supplies patient_id for the LOINC lab branch."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    columns:
+      - name: document_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: patient_id
+        description: "Athena document.patientid — supplies patient_id for the LOINC lab branch (document -> patient)."
+        data_tests: [not_null]
+
+  # ---------- QM-engine native (the int_quality__hedis_evidence spine sources) ----------
+  - name: stg_athena__qmresult
+    description: >
+      Athena Quality-Management-engine result rows (status + satisfied date). Pre-dedup grain:
+      one row per patient × measure × date × provider × program (avg 3.1 rows/clinical-fact —
+      the intermediate collapses these). Drops deleted + archived rows.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: p4p_result_id
+        description: "QM result id. NOT unique here (repeats per provider/program); FK -> stg_athena__p4presult."
+      - name: patient_id
+        description: "Patient (may be depopulated — chart-hop via stg_athena__chart supplies the fallback)."
+      - name: p4p_measure
+        description: "Measure key (e.g. BCS, COL)."
+      - name: result_status
+        description: "SATISFIED / 'Needs Data' / 'Out of Range' etc. Open gaps are KEPT downstream."
+
+  - name: stg_athena__p4presultdata
+    description: >
+      EAV result-value store: one row per p4p_result_id × KEY. The measure-type-specific pivot
+      (labs vs BP vs questionnaire) lives in the intermediate, not here. Drops deletes.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296]
+    columns:
+      - name: p4p_result_id
+        description: "FK -> stg_athena__qmresult / stg_athena__p4presult. Composite grain with result_key."
+      - name: result_key
+        description: "EAV key (renamed from reserved `key`). e.g. CLINICALRESULTOBSERVATIONVALUE, SCORE."
+      - name: result_value
+        description: "EAV value (renamed from reserved `value`)."
+
+  # ---------- support (measure definition + chart-hop) ----------
+  - name: stg_athena__p4presult
+    description: "Bridges a QM result -> its measure definition (p4p_measure_id). Drops deletes."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    columns:
+      - name: p4p_result_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: p4p_measure_id
+        description: "FK -> stg_athena__p4pmeasure."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_athena__p4pmeasure')
+                field: p4p_measure_id
+
+  - name: stg_athena__p4pmeasure
+    description: "Measure definition: category (HEDIS bucket) + measure type. Drops deletes."
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    columns:
+      - name: p4p_measure_id
+        description: "PK."
+        data_tests: [not_null, unique]
+      - name: category
+        description: "HEDIS category bucket (falls back to qmresult.p4p_program when null)."
+
+  - name: stg_athena__qm_chart
+    description: >
+      QM-engine chart-hop -> patient_id fallback when QMRESULT.PATIENTID is depopulated. Named
+      qm_chart (not stg_athena__chart) — the bare name is the canonical RAF shared model, which
+      reads source('athena_raf',...) and does not expose patient_id, so it cannot serve this branch.
+      Grain is (chart_id, patient_id): a chart can map to more than one patient via the crosswalk.
+    config:
+      meta: {owner: Gyasi Sutton}
+      tags: [quality, evidence_funnel, dev-4296, support]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [chart_id, patient_id]
+    columns:
+      - name: chart_id
+        description: "Chart identifier (not unique alone — grain is chart_id × patient_id)."
+        data_tests: [not_null]
+      - name: patient_id
+        description: "Patient for this chart."

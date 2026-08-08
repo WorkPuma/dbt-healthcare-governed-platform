@@ -1,0 +1,155 @@
+interaction_key,enrollment_segment,coefficient,cms_label
+INT200,CNA,0.838,Immune Disorders*Cancer
+INT200,CND,0.460,Immune Disorders*Cancer
+INT200,CFA,0.843,Immune Disorders*Cancer
+INT200,CFD,0.718,Immune Disorders*Cancer
+INT200,CPA,0.661,Immune Disorders*Cancer
+INT200,CPD,0.633,Immune Disorders*Cancer
+INT200,INS,0.000,Immune Disorders*Cancer
+INT201,CNA,0.121,Congestive Heart Failure*Diabetes
+INT201,CND,0.024,Congestive Heart Failure*Diabetes
+INT201,CFA,0.192,Congestive Heart Failure*Diabetes
+INT201,CFD,0.043,Congestive Heart Failure*Diabetes
+INT201,CPA,0.113,Congestive Heart Failure*Diabetes
+INT201,CPD,0.000,Congestive Heart Failure*Diabetes
+INT201,INS,0.169,Congestive Heart Failure*Diabetes
+INT202,CNA,0.155,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,CND,0.121,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,CFA,0.230,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,CFD,0.154,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,CPA,0.158,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,CPD,0.141,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT202,INS,0.191,Congestive Heart Failure*Chronic Obstructive Pulmonary Disease
+INT203,CNA,0.156,Congestive Heart Failure*Renal
+INT203,CND,0.411,Congestive Heart Failure*Renal
+INT203,CFA,0.187,Congestive Heart Failure*Renal
+INT203,CFD,0.461,Congestive Heart Failure*Renal
+INT203,CPA,0.186,Congestive Heart Failure*Renal
+INT203,CPD,0.382,Congestive Heart Failure*Renal
+INT203,INS,0.000,Congestive Heart Failure*Renal
+INT204,CNA,0.363,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,CND,0.379,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,CFA,0.528,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,CFD,0.455,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,CPA,0.392,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,CPD,0.479,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT204,INS,0.414,Cardiorespiratory Failure*Chronic Obstructive Pulmonary Disease
+INT205,CNA,0.085,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,CND,0.282,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,CFA,0.138,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,CFD,0.361,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,CPA,0.101,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,CPD,0.303,Congestive Heart Failure*Specified Heart Arrhythmias
+INT205,INS,0.000,Congestive Heart Failure*Specified Heart Arrhythmias
+INT206,CNA,0.000,Substance Use Disorder*Psychiatric
+INT206,CND,0.138,Substance Use Disorder*Psychiatric
+INT206,CFA,0.000,Substance Use Disorder*Psychiatric
+INT206,CFD,0.191,Substance Use Disorder*Psychiatric
+INT206,CPA,0.000,Substance Use Disorder*Psychiatric
+INT206,CPD,0.201,Substance Use Disorder*Psychiatric
+INT206,INS,0.000,Substance Use Disorder*Psychiatric
+INT207,CNA,0.000,Sepsis*Pressure Ulcer
+INT207,CND,0.000,Sepsis*Pressure Ulcer
+INT207,CFA,0.000,Sepsis*Pressure Ulcer
+INT207,CFD,0.000,Sepsis*Pressure Ulcer
+INT207,CPA,0.000,Sepsis*Pressure Ulcer
+INT207,CPD,0.000,Sepsis*Pressure Ulcer
+INT207,INS,0.155,Sepsis*Pressure Ulcer
+INT208,CNA,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,CND,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,CFA,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,CFD,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,CPA,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,CPD,0.000,Sepsis*Artificial Openings for Feeding or Elimination
+INT208,INS,0.474,Sepsis*Artificial Openings for Feeding or Elimination
+INT209,CNA,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,CND,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,CFA,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,CFD,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,CPA,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,CPD,0.000,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT209,INS,0.359,Artificial Openings for Feeding or Elimination*Pressure Ulcer
+INT210,CNA,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,CND,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,CFA,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,CFD,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,CPA,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,CPD,0.000,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT210,INS,0.216,Chronic Obstructive Pulmonary Disease*Aspiration and Specified Bacterial Pneumonias
+INT211,CNA,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,CND,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,CFA,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,CFD,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,CPA,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,CPD,0.000,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT211,INS,0.472,Aspiration and Specified Bacterial Pneumonias*Pressure Ulcer
+INT212,CNA,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,CND,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,CFA,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,CFD,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,CPA,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,CPD,0.000,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT212,INS,0.346,Sepsis*Aspiration and Specified Bacterial Pneumonias
+INT213,CNA,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,CND,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,CFA,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,CFD,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,CPA,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,CPD,0.000,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT213,INS,0.417,Schizophrenia*Chronic Obstructive Pulmonary Disease
+INT214,CNA,0.000,Schizophrenia*Congestive Heart Failure
+INT214,CND,0.000,Schizophrenia*Congestive Heart Failure
+INT214,CFA,0.000,Schizophrenia*Congestive Heart Failure
+INT214,CFD,0.000,Schizophrenia*Congestive Heart Failure
+INT214,CPA,0.000,Schizophrenia*Congestive Heart Failure
+INT214,CPD,0.000,Schizophrenia*Congestive Heart Failure
+INT214,INS,0.127,Schizophrenia*Congestive Heart Failure
+INT215,CNA,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,CND,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,CFA,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,CFD,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,CPA,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,CPD,0.000,Schizophrenia*Seizure Disorders and Convulsions
+INT215,INS,0.573,Schizophrenia*Seizure Disorders and Convulsions
+INT220,CNA,0.000,"Disabled, Congestive Heart Failure"
+INT220,CND,0.000,"Disabled, Congestive Heart Failure"
+INT220,CFA,0.000,"Disabled, Congestive Heart Failure"
+INT220,CFD,0.000,"Disabled, Congestive Heart Failure"
+INT220,CPA,0.000,"Disabled, Congestive Heart Failure"
+INT220,CPD,0.000,"Disabled, Congestive Heart Failure"
+INT220,INS,0.279,"Disabled, Congestive Heart Failure"
+INT221,CNA,0.000,"Disabled, Pressure Ulcer"
+INT221,CND,0.000,"Disabled, Pressure Ulcer"
+INT221,CFA,0.000,"Disabled, Pressure Ulcer"
+INT221,CFD,0.000,"Disabled, Pressure Ulcer"
+INT221,CPA,0.000,"Disabled, Pressure Ulcer"
+INT221,CPD,0.000,"Disabled, Pressure Ulcer"
+INT221,INS,0.544,"Disabled, Pressure Ulcer"
+INT222,CNA,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,CND,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,CFA,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,CFD,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,CPA,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,CPD,0.000,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT222,INS,0.473,"Disabled, Chronic Ulcer of the Skin, Except Pressure Ulcer"
+INT223,CNA,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,CND,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,CFA,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,CFD,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,CPA,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,CPD,0.000,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT223,INS,0.456,"Disabled, Bone/Joint Muscle Infections/Necrosis"
+INT224,CNA,0.000,"Disabled, Multiple Sclerosis"
+INT224,CND,0.000,"Disabled, Multiple Sclerosis"
+INT224,CFA,0.000,"Disabled, Multiple Sclerosis"
+INT224,CFD,0.000,"Disabled, Multiple Sclerosis"
+INT224,CPA,0.000,"Disabled, Multiple Sclerosis"
+INT224,CPD,0.000,"Disabled, Multiple Sclerosis"
+INT224,INS,0.496,"Disabled, Multiple Sclerosis"
+INT225,CNA,0.000,"Disabled, Opportunistic Infections"
+INT225,CND,0.000,"Disabled, Opportunistic Infections"
+INT225,CFA,0.000,"Disabled, Opportunistic Infections"
+INT225,CFD,0.000,"Disabled, Opportunistic Infections"
+INT225,CPA,0.000,"Disabled, Opportunistic Infections"
+INT225,CPD,0.000,"Disabled, Opportunistic Infections"
+INT225,INS,0.405,"Disabled, Opportunistic Infections"

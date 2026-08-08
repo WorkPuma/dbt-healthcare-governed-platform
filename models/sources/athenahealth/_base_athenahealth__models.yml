@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: base_athenahealth__qmresult
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.QMRESULT Delta
+      table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__qmresult) and provider_bonus
+      (stg_bonus__quality_measures) -- delete/archive filtering stays
+      consumer-specific (DEV-4296).
+
+  - name: base_athenahealth__p4presult
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.P4PRESULT Delta
+      table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__p4presult) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
+
+  - name: base_athenahealth__p4presultdata
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.P4PRESULTDATA
+      Delta table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__p4presultdata) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
+
+  - name: base_athenahealth__p4pmeasure
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.P4PMEASURE Delta
+      table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__p4pmeasure) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
+
+  - name: base_athenahealth__document
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.DOCUMENT Delta
+      table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__document) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
+
+  - name: base_athenahealth__clinicalresult
+    description: >
+      Pure passthrough over the raw athenahealth.athenaone.CLINICALRESULT
+      Delta table. No filter, no rename. Shared source read for the quality
+      funnel (stg_athena__clinicalresult) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
+
+  - name: base_athenahealth__clinicalresultobservation
+    description: >
+      Pure passthrough over the raw
+      athenahealth.athenaone.CLINICALRESULTOBSERVATION Delta table. No
+      filter, no rename. Shared source read for the quality funnel
+      (stg_athena__clinicalresultobservation) and provider_bonus
+      (stg_bonus__quality_measures) (DEV-4296).
